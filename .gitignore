@@ -1,0 +1,13 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.env
+*.db
+*.db-*
+*.sqlite*
+node_modules/
+test-results/
+*.log
+.vercel/
+release/
+qa-*.png
