@@ -54,7 +54,7 @@ class Provider:
                   for m in configured_models()]
         if self.gemini_key or self.gemini_url:
             if not result:
-                result.append({"id": "fast", "provider": "gemini",
+                result.append({"id": "gemini:gemini-3.8-flash", "provider": "gemini",
                     "provider_model": "gemini-3.8-flash", "label": "Gemini 3.8 Flash",
                     "tier": "fast", "status": "configured-not-yet-verified"})
         if self.seek_key or self.seek_url:
