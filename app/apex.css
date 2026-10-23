@@ -34,4 +34,4 @@
 .apex-connection{font-size:var(--text-xs);line-height:1.6;color:var(--text2);text-align:center;margin:var(--space-3) auto;max-width:60ch}
 .apex-scroll-hint{display:none}
 @media(max-width:600px){.apex-scroll-hint{display:block}}
-@media(max-width:600px){.apex-run{align-items:start;flex-direction:column}.apex-wide .modal-b{padding:var(--space-3)}.top-end{gap:4px}.plan-pill{padding-inline:8px}.apex-usage{gap:var(--space-3)}.top-end [data-act="runs"]{display:none}.top-mid .mode-opt{padding-inline:8px}.model-btn{max-width:90px}.model-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(max-width:600px){.apex-run{align-items:start;flex-direction:column}.apex-wide .modal-b{padding:var(--space-3)}.top-end{gap:4px}.plan-pill{padding-inline:8px}.apex-usage{gap:var(--space-3)}.top-end [data-act="runs"]{display:none}.top-mid .mode-opt{padding-inline:8px}.model-btn{max-width:130px}.model-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
