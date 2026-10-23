@@ -116,3 +116,39 @@ def test_openai_transient_retry_is_bounded(monkeypatch,transport):
         assert e.value.retryable
     asyncio.run(scenario())
     assert len(calls)==3
+
+
+def test_model_resolution_gemini_only(monkeypatch):
+    monkeypatch.delenv("AISEEK_ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = Provider()
+    ids = [m["id"] for m in provider.models()]
+    assert "fast" in ids
+    fast = next(m for m in provider.models() if m["id"] == "fast")
+    assert fast["provider"] == "gemini" and fast["provider_model"] == "gemini-3.8-flash"
+
+
+def test_model_resolution_aiseek_only(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("AISEEK_ACCESS_TOKEN", "test-placeholder-not-real")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = Provider()
+    ids = [m["id"] for m in provider.models()]
+    assert "fast" in ids
+    fast = next(m for m in provider.models() if m["id"] == "fast")
+    assert fast["provider"] == "aiseek" and fast["provider_model"] == "deepseek/deepseek-chat"
+
+
+def test_model_resolution_both(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
+    monkeypatch.setenv("AISEEK_ACCESS_TOKEN", "test-placeholder-not-real")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = Provider()
+    ids = [m["id"] for m in provider.models()]
+    assert "fast" in ids
+    fast = next(m for m in provider.models() if m["id"] == "fast")
+    assert fast["provider"] == "aiseek"
+    assert "gemini:gemini-3.8-flash" in ids
+    assert provider.tier("fast") == "fast"
+    assert provider.tier("gemini:gemini-3.8-flash") == "fast"

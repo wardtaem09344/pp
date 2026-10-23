@@ -54,7 +54,11 @@ class Provider:
                   for m in configured_models()]
         if self.gemini_key or self.gemini_url:
             if not result:
-                result.append({"id": "gemini:gemini-3.8-flash", "provider": "gemini",
+                # With ai-seek configured, DeepSeek is the durable default "fast"
+                # model; Gemini stays selectable under its own id. Without ai-seek,
+                # Gemini keeps the "fast" id so a default chat remains possible.
+                gemini_id = "fast" if not (self.seek_key or self.seek_url) else "gemini:gemini-3.8-flash"
+                result.append({"id": gemini_id, "provider": "gemini",
                     "provider_model": "gemini-3.8-flash", "label": "Gemini 3.8 Flash",
                     "tier": "fast", "status": "configured-not-yet-verified"})
         if self.seek_key or self.seek_url:
