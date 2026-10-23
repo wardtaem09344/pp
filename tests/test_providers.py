@@ -95,11 +95,12 @@ def test_aiseek_never_executes_unstructured_prose(monkeypatch, transport):
     asyncio.run(scenario())
 
 
-def test_aiseek_seven_candidates_are_not_discovery(monkeypatch):
+def test_aiseek_candidates_are_not_discovery(monkeypatch):
     monkeypatch.setenv("AISEEK_ACCESS_TOKEN","test-placeholder-not-real")
     p=Provider()
     candidates=[m for m in p.models() if m["id"].startswith("aiseek:")]
-    assert len(candidates)==7 and all(m["status"]=="provided-candidate" for m in candidates)
+    assert len(candidates)==6 and all(m["status"]=="provided-candidate" for m in candidates)
+    assert not any("claude" in m["id"] for m in candidates)
 
 
 def test_openai_transient_retry_is_bounded(monkeypatch,transport):
