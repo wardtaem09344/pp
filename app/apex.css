@@ -73,3 +73,17 @@
 /* Keep the two mode labels visible even on narrow screens. */
 .topbar .top-mid .mode-opt{width:auto!important}
 .topbar .top-mid .mode-opt>span[data-t]{display:inline!important}
+
+/* Final header placement: sidebar toggle left, Chat/Agent centered, conversation menu right. */
+.topbar .sidebar-top-btn{position:absolute;left:10px;right:auto;top:50%;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;z-index:2}
+.topbar .sidebar-top-btn:hover{background:var(--hover)}
+.topbar .top-end{left:auto;right:10px}
+.topbar .top-end .icon-btn{width:36px;height:36px}
+.composer-model-btn{display:none!important}
+.composer:focus-within .composer-model-btn,
+.composer:has(#input:not(:placeholder-shown)) .composer-model-btn{display:inline-flex!important}
+@media(max-width:767px){
+ .topbar .sidebar-top-btn{left:5px;width:32px;height:32px}
+ .topbar .top-end{left:auto;right:5px}
+ .topbar .top-end .icon-btn{width:32px;height:32px}
+}
