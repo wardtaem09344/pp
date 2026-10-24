@@ -34,7 +34,7 @@ def test_gemini_discovery_and_tool_signature_roundtrip(monkeypatch, tmp_path, tr
                 {"name":"models/example-image","supportedGenerationMethods":["generateContent"]},
                 {"name":"models/example-pro","supportedGenerationMethods":["generateContent"]}]})
         body=json.loads(request.content)
-        if not body.get("tools"):
+        if "APEX_OK" in json.dumps(body):
             return httpx.Response(200,json={"candidates":[{"content":{"parts":[{"text":"APEX_OK"}]}}]})
         return httpx.Response(200,json={"candidates":[{"content":{"parts":[
             {"functionCall":{"name":"calculate","args":{"expression":"6*7"}},"thoughtSignature":"fixture-signature"}]}}],
