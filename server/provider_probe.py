@@ -42,6 +42,7 @@ def main():
             proc = subprocess.run(["curl", "--silent", "--show-error", "--max-time", "90",
                 "--request", "POST", "--header", "Accept: text/event-stream",
                 "--header", "Content-Type: application/json", "--header", "x-app-id: ai-seek",
+                "--header", "x-access-token: " + token,
                 "--data-binary", "@-", "--write-out", "\nAPEX_HTTP:%{http_code}",
                 "https://ai-seek.thebetter.ai/v4/chat/send"], input=json.dumps(payload),
                 text=True, capture_output=True, timeout=100)
