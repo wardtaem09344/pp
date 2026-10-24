@@ -6,7 +6,7 @@ from fastapi import HTTPException
 PLANS = {
     "free": dict(label="Free", messages=20, agent=0, research=0, steps=0, concurrent=1,
                  files=0, file_bytes=0, context=6000, output_tokens=1500,
-                 models=["fast"], tools=[], memory=False, resume=False),
+                 models=["fast", "standard"], tools=[], memory=False, resume=False),
     "plus": dict(label="Plus", messages=200, agent=10, research=0, steps=8, concurrent=1,
                  files=10, file_bytes=100000, context=16000, output_tokens=3000,
                  models=["fast", "standard"], tools=["calculate", "list_files", "read_file", "write_file", "edit_file", "validate_file", "update_workflow"],
