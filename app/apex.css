@@ -36,11 +36,37 @@
 @media(max-width:600px){.apex-scroll-hint{display:block}}
 @media(max-width:600px){.apex-run{align-items:start;flex-direction:column}.apex-wide .modal-b{padding:var(--space-3)}.top-end{gap:4px}.plan-pill{padding-inline:8px}.apex-usage{gap:var(--space-3)}.top-end [data-act="runs"]{display:none}.top-mid .mode-opt{padding-inline:8px}.model-btn{max-width:130px}.model-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 
-/* Minimal Claude-style chat header: two controls in one corner. */
-.topbar{justify-content:flex-start;gap:0;padding-inline:12px}
-.topbar-actions{display:flex;align-items:center;gap:4px}
-.topbar-actions .icon-btn{width:38px;height:38px;border-radius:11px}
-.topbar-actions .icon-btn:hover{background:var(--hover)}
-.topbar-actions [data-icon="dotsV"] svg{width:19px;height:19px}
+/* Restore the original three-zone header: sidebar/model on the left, modes and Web centered, conversation menu on the right. */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:58px;height:auto;padding:7px 12px}
+.top-start,.top-mid,.top-end{display:flex;align-items:center;min-width:0;gap:6px}
+.top-start,.top-end{flex:0 0 auto}
+.top-mid{flex:1;justify-content:center;gap:10px}
+.top-start .icon-btn,.top-end .icon-btn{width:36px;height:36px;border-radius:10px;flex-shrink:0}
+.top-start .icon-btn:hover,.top-end .icon-btn:hover{background:var(--hover)}
+.top-start .model-btn{font-size:16px;max-width:190px}
+.top-start .model-name{max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-mid .mode-toggle{flex-shrink:0}
+.top-mid .top-tools{display:flex;align-items:center;gap:4px;max-width:none;overflow:visible}
+.top-mid .top-tool{width:auto;min-width:0;min-height:36px;padding:0 11px;border:1px solid var(--border);border-radius:11px}
+.top-mid .top-tool span[data-t]{display:inline}
+.top-mid .top-tool.active{color:var(--text);background:color-mix(in srgb,var(--accent-blue) 11%,var(--main));border-color:color-mix(in srgb,var(--accent-blue) 32%,var(--border))}
 #moreBtn{display:inline-flex!important}
-@media(max-width:767px){.topbar{height:50px;padding-inline:10px}.topbar-actions{gap:2px}}
+@media(max-width:767px){
+ .topbar{gap:5px;padding:5px 7px;min-height:50px}
+ .top-start,.top-mid,.top-end{gap:3px}
+ .top-mid{justify-content:center;gap:4px}
+ .top-start .model-btn{max-width:120px;padding-inline:6px;font-size:14px}
+ .top-start .model-name{max-width:82px}
+ .top-mid .mode-opt{padding-inline:9px;font-size:12px;gap:4px}
+ .top-mid .top-tool{width:34px;min-width:34px;padding:0;justify-content:center}
+ .top-mid .top-tool span[data-t]{display:none}
+ .top-end .icon-btn{width:32px;height:32px}
+}
+@media(max-width:390px){
+ .topbar{gap:2px;padding-inline:4px}
+ .top-start .model-btn{max-width:92px}
+ .top-start .model-name{max-width:58px}
+ .top-mid{gap:2px}
+ .top-mid .mode-opt{padding-inline:7px}
+ .top-end .icon-btn{width:29px}
+}
