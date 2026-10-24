@@ -134,6 +134,28 @@ def test_openai_transient_retry_is_bounded(monkeypatch,transport):
     assert len(calls)==3
 
 
+def test_failed_refresh_marks_previous_catalogue_stale(monkeypatch, transport):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
+    db = Database(":memory:")
+    db.execute("INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)",
+               ("gemini:old", "gemini", "old-model", "Old model", "fast", "verified", 1.0))
+    provider = Provider(db)
+    install, calls = transport
+    install(lambda request: httpx.Response(403, json={"error": "temporary refusal"}))
+
+    async def scenario():
+        result = await provider.discover()
+        assert result["discovered"] == []
+        assert result["catalogue_preserved_stale"] is True
+        assert result["models"] == []
+        row = db.one("SELECT status FROM provider_models WHERE id='gemini:old'")
+        assert row["status"] == "stale"
+        assert provider.models() == []
+
+    asyncio.run(scenario())
+    assert len(calls) == 1
+
+
 def test_model_resolution_requires_verified_catalog(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
     monkeypatch.setenv("AISEEK_ACCESS_TOKEN", "test-placeholder-not-real")
