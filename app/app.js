@@ -99,6 +99,8 @@ const STR = {
     welcome: ['بماذا يمكنني المساعدة؟', 'ما الذي يدور في ذهنك اليوم؟', 'من أين نبدأ؟', 'جاهز عندما تكون جاهزاً.', 'ما الجدول اليوم؟'],
     temp_title: 'دردشة مؤقتة', temp_note: 'تخفي الواجهة هذه الدردشة أثناء الجلسة وتحاول حذفها عند الانتقال. قد تبقى بيانات على الخادم إذا أُغلقت الصفحة؛ وتخضع معالجة الرسائل لسياسة مزوّد النموذج.',
     add_photos: 'إضافة صور وملفات', create_image: 'إنشاء صورة', thinking: 'فكّر لفترة أطول', deep_research: 'بحث متعمق', web_search: 'بحث في الويب', more: 'المزيد',
+    agent_tools_head: 'أدوات الوكيل', tool_write: 'الكتابة', tool_write_sub: 'إنشاء نص أو مسودة', tool_edit: 'التحرير والتعديل', tool_edit_sub: 'تحسين نص أو ملف موجود', tool_code: 'كتابة الأكواد', tool_code_sub: 'إنشاء أو تعديل ملفات برمجية', tool_command: 'تنفيذ أوامر', tool_command_sub: 'تشغيل أمر ضمن بيئة الوكيل',
+    preset_write: 'ساعدني في كتابة النص التالي. اسألني عن التفاصيل الناقصة عند الحاجة:\\n', preset_edit: 'ساعدني في تحرير النص أو الملف التالي وتحسينه. سأضيف المحتوى أو التفاصيل بعد ذلك:\\n', preset_code: 'اكتب أو عدّل الكود المطلوب. وضّح الملفات والتغييرات، ثم اختبرها إن أمكن:\\n', preset_command: 'أريد تنفيذ أمر ضمن بيئة المشروع. اشرح الأمر المقترح وآثاره قبل تشغيل أي أمر يغيّر الملفات أو البيئة:\\n',
     image_chip: 'صورة', think_chip: 'تفكير', search_chip: 'بحث', research_chip: 'بحث متعمق',
     copy: 'نسخ', copied: 'تم النسخ', edit: 'تعديل الرسالة', good: 'رد جيد', bad: 'رد سيئ', read: 'قراءة بصوت عالٍ', stop_read: 'إيقاف', regen: 'إعادة المحاولة', share_msg: 'مشاركة',
     cancel: 'إلغاء', send: 'إرسال', copy_code: 'نسخ الرمز', code_copied: 'تم النسخ',
@@ -149,6 +151,8 @@ const STR = {
     welcome: ['What can I help with?', 'What’s on your mind today?', 'Where should we begin?', 'Ready when you are.', 'What’s on the agenda today?'],
     temp_title: 'Temporary Chat', temp_note: 'The interface hides this chat during the session and attempts deletion when navigating away. Data can remain on the server if the page closes; model-provider processing follows its own policy.',
     add_photos: 'Add photos & files', create_image: 'Create image', thinking: 'Think longer', deep_research: 'Deep research', web_search: 'Web search', more: 'More',
+    agent_tools_head: 'Agent tools', tool_write: 'Writing', tool_write_sub: 'Create a draft or text', tool_edit: 'Edit and revise', tool_edit_sub: 'Improve existing text or files', tool_code: 'Write code', tool_code_sub: 'Create or edit code files', tool_command: 'Run commands', tool_command_sub: 'Run a command in the agent environment',
+    preset_write: 'Help me write the following. Ask for missing details when needed:\\n', preset_edit: 'Help me revise and improve the following text or file. I will add the content or details next:\\n', preset_code: 'Write or modify the requested code. Explain the files and changes, then test them if possible:\\n', preset_command: 'I want to run a command in the project environment. Explain the proposed command and its effects before running anything that changes files or the environment:\\n',
     image_chip: 'Image', think_chip: 'Think', search_chip: 'Search', research_chip: 'Research',
     copy: 'Copy', copied: 'Copied', edit: 'Edit message', good: 'Good response', bad: 'Bad response', read: 'Read aloud', stop_read: 'Stop', regen: 'Try again', share_msg: 'Share',
     cancel: 'Cancel', send: 'Send', copy_code: 'Copy code', code_copied: 'Copied',
@@ -849,8 +853,30 @@ function toggleTool(k) {
 function setTool(k) { state.tools = k ? [k] : []; renderToolChip(); setPlaceholder(); input.focus(); }
 function clearTool(k) { state.tools = k ? state.tools.filter(x => x !== k) : []; renderToolChip(); setPlaceholder(); }
 function renderToolChip() {
-  const box = $('#toolChips'); if (!box) return;
-  box.innerHTML = state.tools.map(k => `<button type="button" class="tool-chip" data-act="clear-tool" data-tool="${k}" aria-label="${esc(t(TOOLS[k].chip))}"><span data-icon="${TOOLS[k].icon}">${icon(TOOLS[k].icon)}</span><span>${esc(t(TOOLS[k].chip))}</span><span class="chip-x">${iconSz('x', 12)}</span></button>`).join('');
+  const box = $('#toolChips');
+  if (box) box.innerHTML = state.tools.map(k => `<button type="button" class="tool-chip" data-act="clear-tool" data-tool="${k}" aria-label="${esc(t(TOOLS[k].chip))}"><span data-icon="${TOOLS[k].icon}">${icon(TOOLS[k].icon)}</span><span>${esc(t(TOOLS[k].chip))}</span><span class="chip-x">${iconSz('x', 12)}</span></button>`).join('');
+  syncQuickTools();
+}
+function syncQuickTools() {
+  $('.top-tool').forEach(b => {
+    const active = hasTool(b.dataset.tool);
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-pressed', String(active));
+  });
+}
+function moreToolsMenu(anchor) {
+  popover(anchor, [
+    { head: t('agent_tools_head') },
+    { icon: 'pencil', label: t('tool_write'), sub: t('tool_write_sub'), run: () => startAgentPreset('write') },
+    { icon: 'edit', label: t('tool_edit'), sub: t('tool_edit_sub'), run: () => startAgentPreset('edit') },
+    { icon: 'code', label: t('tool_code'), sub: t('tool_code_sub'), run: () => startAgentPreset('code') },
+    { icon: 'cmd', label: t('tool_command'), sub: t('tool_command_sub'), run: () => startAgentPreset('command') },
+  ], { side: isMobile() ? 'top' : 'bottom', width: 280 });
+}
+function startAgentPreset(kind) {
+  const prompts = { write: t('preset_write'), edit: t('preset_edit'), code: t('preset_code'), command: t('preset_command') };
+  setMode('agent');
+  fillPrompt(prompts[kind] || '');
 }
 function plusMenu(anchor) {
   popover(anchor, [
@@ -860,8 +886,9 @@ function plusMenu(anchor) {
     { icon: 'bulb', label: t('thinking'), checked: hasTool('think'), run: () => toggleTool('think') },
     { icon: 'telescope', label: t('deep_research'), checked: hasTool('research'), run: () => toggleTool('research') },
     { icon: 'globe', label: t('web_search'), checked: hasTool('search'), run: () => toggleTool('search') },
-    { icon: 'more', label: t('more'), right: icon('chevSide'), run: () => toast(t('soon')) },
-  ], { side: isMobile() ? 'top' : 'bottom', width: 240 });
+    '-',
+    { icon: 'more', label: t('more'), right: icon('chevSide'), run: () => moreToolsMenu(anchor) },
+  ], { side: isMobile() ? 'top' : 'bottom', width: 260 });
 }
 
 /* dictation */
@@ -1265,6 +1292,7 @@ document.addEventListener('click', (e) => {
     case 'model-menu': if (openPop?.anchor === b) closePop(); else modelMenu(b); break;
     case 'plus-menu': if (openPop?.anchor === b) closePop(); else plusMenu(b); break;
     case 'clear-tool': clearTool(b.dataset.tool); break;
+    case 'quick-tool': toggleTool(b.dataset.tool); break;
     case 'dictate': dictate(); break;
     case 'scroll-bottom': thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' }); break;
     case 'share': state.chatId && shareChat(state.chatId); break;
