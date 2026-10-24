@@ -244,7 +244,8 @@ def create_app(database=None, provider=None):
         return {"provider_ready": provider.ready, "plan": user["plan"],
                 "models": [{**m, "allowed": m.get("tier", m["id"]) in plan["models"]} for m in provider.models()],
                 "tools": ToolRegistry(db, user, "").inventory(),
-                "features": {"image_generation": False, "vision": False, "shell": False, "browser": False,
+                "features": {"image_generation": "generate_image" in ToolRegistry(db, user, "").available(),
+                             "vision": False, "shell": False, "browser": False,
                              "parallel_agents": False, "memory": plan["memory"], "resume": plan["resume"]},
                 "limits": plan, "storage": "postgresql" if db.pg else "sqlite-development"}
 
