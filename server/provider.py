@@ -197,19 +197,25 @@ class Provider:
                 if candidate:
                     save(candidate["id"], "openai", candidate["provider_model"],
                          candidate["label"], candidate["id"])
-        # Commit the new verified catalogue atomically only after all provider probes
-        # have completed. A database error rolls back the deletion and preserves the
-        # previous catalogue; only newly tested models are inserted as verified.
-        with self.db.transaction():
-            self.db.execute("DELETE FROM provider_models")
-            for model in catalogue.values():
-                self.db.execute(
-                    "INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)",
-                    (model["id"], model["provider"], model["model"], model["label"],
-                     model["tier"], model["status"], model["updated"]),
-                )
+        # Commit atomically only after all provider probes have completed. If no
+        # candidate passed, keep prior rows for diagnosis but mark them stale so
+        # models() cannot expose them as available. A later successful refresh replaces
+        # the catalogue with freshly verified rows.
+        if catalogue:
+            with self.db.transaction():
+                self.db.execute("DELETE FROM provider_models")
+                for model in catalogue.values():
+                    self.db.execute(
+                        "INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)",
+                        (model["id"], model["provider"], model["model"], model["label"],
+                         model["tier"], model["status"], model["updated"]),
+                    )
+        else:
+            with self.db.transaction():
+                self.db.execute("UPDATE provider_models SET status='stale' WHERE status='verified'")
         return {"discovered": discovered, "models": self.models(),
                 "checked_candidates": checked, "verified_only": True,
+                "catalogue_preserved_stale": not bool(catalogue),
                 "note": "Only models that returned APEX_OK during this refresh are listed."}
 
     async def _gemini(self, messages, tools, match, output_tokens, cancel):
