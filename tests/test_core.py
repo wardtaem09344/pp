@@ -372,6 +372,7 @@ def test_credential_fields_never_exposed(setup):
 
 def test_generate_image_saves_downloadable_file(setup, monkeypatch):
     # Synthetic provider response: proves the tool wiring, not a live Gemini call.
+    monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
     import base64
     from server.provider import Provider
     png = base64.b64encode(b"\x89PNG fixture").decode()
@@ -392,3 +393,19 @@ def test_generate_image_saves_downloadable_file(setup, monkeypatch):
     asyncio.run(scenario())
     u["plan"]="plus"
     assert "generate_image" not in ToolRegistry(db,u,"chat").available()
+
+
+def test_image_tool_is_not_advertised_without_gemini_credentials(setup, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("CUSTOM_CRED_GENERATIVELANGUAGE_GOOGLEAPIS_COM_URL", raising=False)
+    monkeypatch.delenv("CUSTOM_CRED_GENERATIVELANGUAGE_GOOGLEAPIS_COM_PROXY_AUTH_KEY", raising=False)
+    db, _, client = setup
+    user, headers = signup(client)
+    db.execute("UPDATE users SET plan='pro' WHERE id=?", (user["id"],))
+    current_user = db.one("SELECT * FROM users WHERE id=?", (user["id"],))
+    registry = ToolRegistry(db, current_user, "chat")
+    assert "generate_image" not in registry.available()
+    response = client.get("/api/capabilities", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["features"]["image_generation"] is False
+    assert "generate_image" not in [tool["name"] for tool in response.json()["tools"]]
