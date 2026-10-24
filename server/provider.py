@@ -71,19 +71,22 @@ class Provider:
         """Replace the catalogue with models that pass a real minimal generation."""
         if not self.db:
             raise ProviderError("no_catalog_storage", "Model catalogue storage unavailable")
-        self.db.execute("DELETE FROM provider_models")
+        # Probe into memory first. Never delete the working catalogue before network
+        # checks finish: an exception or partial refresh must not leave half a catalogue.
         discovered, checked = [], 0
+        catalogue = {}
         probe_messages = [{"role": "user", "content": "Reply with exactly APEX_OK."}]
 
         def save(model_id, provider, provider_model, label, tier):
-            self.db.execute("""INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)
-                ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,model=excluded.model,
-                label=excluded.label,tier=excluded.tier,status=excluded.status,updated=excluded.updated""",
-                (model_id, provider, provider_model, label, tier, "verified", time.time()))
-            discovered.append(model_id)
+            catalogue[model_id] = {
+                "id": model_id, "provider": provider, "model": provider_model,
+                "label": label, "tier": tier, "status": "verified", "updated": time.time(),
+            }
+            if model_id not in discovered:
+                discovered.append(model_id)
 
         def save_fast_alias(provider, provider_model, label):
-            if not self.db.one("SELECT id FROM provider_models WHERE id='fast'"):
+            if "fast" not in catalogue:
                 save("fast", provider, provider_model, label + " · Fast default", "fast")
 
         # Gemini's model list is only a candidate list; each candidate must generate.
@@ -194,6 +197,17 @@ class Provider:
                 if candidate:
                     save(candidate["id"], "openai", candidate["provider_model"],
                          candidate["label"], candidate["id"])
+        # Commit the new verified catalogue atomically only after all provider probes
+        # have completed. A database error rolls back the deletion and preserves the
+        # previous catalogue; only newly tested models are inserted as verified.
+        with self.db.transaction():
+            self.db.execute("DELETE FROM provider_models")
+            for model in catalogue.values():
+                self.db.execute(
+                    "INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)",
+                    (model["id"], model["provider"], model["model"], model["label"],
+                     model["tier"], model["status"], model["updated"]),
+                )
         return {"discovered": discovered, "models": self.models(),
                 "checked_candidates": checked, "verified_only": True,
                 "note": "Only models that returned APEX_OK during this refresh are listed."}
