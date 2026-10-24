@@ -25,6 +25,31 @@ def configured_models():
     return models
 
 
+# Prefer current stable Gemini text models when a provider lists more candidates
+# than we can probe in one refresh. These are candidate IDs only: discover() still
+# requires each model to return the APEX_OK probe before exposing it to users.
+_GEMINI_MODEL_PRIORITY = {
+    "gemini-4-argon": 0,
+    "gemini-3.8-flash": 1,
+    "gemini-3.7-flash": 2,
+    "gemini-3.6-flash": 3,
+    "gemini-3.5-flash-lite": 4,
+    "gemini-3.1-flash-lite": 5,
+    "gemini-2.5-flash": 6,
+    "gemini-2.5-flash-lite": 7,
+    "gemini-2.5-pro": 8,
+}
+
+
+def rank_gemini_candidates(candidates, limit=36):
+    """Prioritize newer known text models without treating names as verification."""
+    return sorted(candidates, key=lambda item: (
+        _GEMINI_MODEL_PRIORITY.get(item[0], 100),
+        0 if item[2] == "fast" else 1,
+        item[0],
+    ))[:limit]
+
+
 class Provider:
     def __init__(self, db=None):
         self.db = db
@@ -114,7 +139,7 @@ class Provider:
                         token = data.get("nextPageToken", "")
                         if not token:
                             break
-                candidates = sorted(candidates, key=lambda x: (0 if x[2] == "fast" else 1, x[0]))[:24]
+                candidates = rank_gemini_candidates(candidates)
                 semaphore = asyncio.Semaphore(6)
                 async def test_gemini(candidate):
                     name, label, tier = candidate
