@@ -627,3 +627,7 @@ html.dark .dl.add .sg{color:#4ade80} html.dark .dl.del .sg{color:#f87171}
 .app.agent-mode .thread-inner{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:0}
 .app.agent-mode .composer::before,.app.agent-mode .composer::after{content:none;animation:none}
 .app.agent-mode.mode-switching .composer-wrap{animation:none}
+
+
+/* Deep-search activity disclosure */
+.think-summary-note{font-size:12.5px;line-height:1.55;color:var(--text2);padding:8px 10px;margin:2px 0 8px;border-inline-start:2px solid var(--accent-blue);background:color-mix(in srgb,var(--accent-blue) 6%,transparent);border-radius:0 8px 8px 0}
