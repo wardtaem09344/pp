@@ -86,25 +86,15 @@
   <main class="main">
     <canvas id="codeBg" class="code-bg" aria-hidden="true"></canvas>
 
-    <header class="topbar" dir="ltr">
-      <div class="top-start">
-        <button class="icon-btn sidebar-top-btn" data-act="toggle-sidebar" data-tip="open_sidebar" aria-label="Toggle sidebar"><span data-icon="sidebar"></span></button>
-        <button class="model-btn" data-act="model-menu" data-tip="model_head" aria-label="Choose model" aria-haspopup="menu">
-          <span class="model-name">GPT-6</span><span id="modelVer" class="model-ver hidden"></span><span class="chev" data-icon="chevron"></span>
-        </button>
-      </div>
+    <header class="topbar" aria-label="Conversation header">
       <div class="top-mid">
         <div id="modeToggle" class="mode-toggle" role="group" aria-label="Chat or Agent mode">
           <span id="modeThumb" class="mode-thumb"></span>
-          <button type="button" class="mode-opt on" data-m="chat"><span data-icon="chat"></span><span data-t="mode_chat">Chat</span></button>
-          <button type="button" class="mode-opt" data-m="agent"><span data-icon="agent"></span><span data-t="mode_agent">Agent</span></button>
-        </div>
-        <div class="top-tools" aria-label="Quick tools">
-          <button type="button" class="top-tool" data-act="quick-tool" data-tool="search" data-tip="web_search" aria-label="Web search" aria-pressed="false"><span data-icon="globe"></span><span data-t="web_search">Web</span></button>
+          <button type="button" class="mode-opt on" data-m="chat"><span data-t="mode_chat">Chat</span></button>
+          <button type="button" class="mode-opt" data-m="agent"><span data-t="mode_agent">Agent</span></button>
         </div>
       </div>
       <div class="top-end">
-        <button class="icon-btn" data-act="new-chat" data-tip="new_chat" aria-label="New chat"><span data-icon="newchat"></span></button>
         <button class="icon-btn" id="moreBtn" data-act="chat-more" data-tip="more" aria-label="Conversation options" aria-haspopup="menu"><span data-icon="dotsV"></span></button>
       </div>
       <button class="icon-btn hidden" id="shareBtn" data-act="share" aria-hidden="true" tabindex="-1" hidden><span data-icon="share"></span></button>
@@ -126,6 +116,9 @@
         <div id="attachRow" class="attach-row hidden"></div>
         <div class="comp-row">
           <button type="button" class="icon-btn comp-plus" data-act="plus-menu" data-tip="add_files" aria-label="add"><span data-icon="plus"></span></button>
+          <button type="button" class="model-btn composer-model-btn" data-act="model-menu" data-tip="model_head" aria-label="Choose model" aria-haspopup="menu">
+            <span class="model-name">Models</span><span id="modelVer" class="model-ver hidden"></span><span class="chev" data-icon="chevron"></span>
+          </button>
           <div id="toolChips" class="tool-chips"></div>
           <div class="input-box"><textarea id="input" rows="1" aria-label="message"></textarea></div>
           <div class="comp-end">
