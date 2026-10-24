@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import base64
 import io
 import json
 import os
@@ -466,7 +467,11 @@ def create_app(database=None, provider=None):
         user = current_user(request)
         owned_chat(chat_id, user)
         row = ToolRegistry(db, user, chat_id).file(path)
-        return Response(row["content"], media_type="text/plain; charset=utf-8",
+        body, media = row["content"], "text/plain; charset=utf-8"
+        if body.startswith("data:image/") and ";base64," in body:
+            head, b64 = body.split(";base64,", 1)
+            body, media = base64.b64decode(b64), head[5:]
+        return Response(body, media_type=media,
                         headers={"Content-Disposition": "attachment; filename*=UTF-8''" + __import__("urllib.parse", fromlist=["quote"]).quote(path.rsplit("/", 1)[-1])})
 
     @app.get("/api/agent/{chat_id}/zip")
@@ -476,7 +481,10 @@ def create_app(database=None, provider=None):
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for row in db.all("SELECT path,content FROM files WHERE user_id=? AND chat_id=?", (user["id"], chat_id)):
-                archive.writestr(safe_path(row["path"]), row["content"])
+                data = row["content"]
+                if data.startswith("data:image/") and ";base64," in data:
+                    data = base64.b64decode(data.split(";base64,", 1)[1])
+                archive.writestr(safe_path(row["path"]), data)
         return Response(buffer.getvalue(), media_type="application/zip",
                         headers={"Content-Disposition": 'attachment; filename="agent-files.zip"'})
 

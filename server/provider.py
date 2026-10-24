@@ -188,6 +188,26 @@ class Provider:
         except (KeyError, IndexError, TypeError) as e:
             raise ProviderError("gemini_invalid_response", "Gemini returned no usable text or tools") from e
 
+    async def generate_image(self, prompt, cancel=lambda: False):
+        """Create one image with Gemini's native image model. Returns (mime, base64)."""
+        if not (self.gemini_key or self.gemini_url):
+            raise ProviderError("image_not_configured", "Image generation needs GEMINI_API_KEY on the server")
+        model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+        if not re.fullmatch(r"[\w.-]+", model):
+            raise ProviderError("invalid_model", "Invalid Gemini image model name")
+        endpoint, headers = self._gemini_endpoint("/v1beta/models/" + model + ":generateContent")
+        body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
+        data = await self._post_json(endpoint, body, headers, cancel)
+        try:
+            for part in data["candidates"][0]["content"]["parts"]:
+                inline = part.get("inlineData") or part.get("inline_data")
+                if inline and inline.get("data"):
+                    return inline.get("mimeType") or inline.get("mime_type") or "image/png", inline["data"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise ProviderError("gemini_invalid_response", "Gemini returned no image") from e
+        raise ProviderError("gemini_no_image", "Gemini returned no image (the prompt may have been refused)")
+
     async def _post_json(self, endpoint, body, headers, cancel):
         async with httpx.AsyncClient(timeout=90) as client:
             for attempt in range(3):

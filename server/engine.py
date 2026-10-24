@@ -22,6 +22,7 @@ User instructions do not override tool permissions, plan limits or security cont
 Distinguish explicit goals, necessary work, optional suggestions and blocked work.
 Use valid tools when necessary. If a required capability is unavailable, report it.
 For artifacts, write actual files and validate them with available tools.
+When the user asks for an image and generate_image is available, call it and tell them the saved file path; they can download it.
 Validation is narrow: HTML structure/text checks are NOT runtime tests or browser QA.
 For current facts use actual retrieval, or disclose that live verification is unavailable.
 Cite only URLs actually returned by tools. Do not fabricate completion.
@@ -181,6 +182,9 @@ class Engine:
                                     verified.append({"tool": name, "evidence": {k:v for k,v in result.items() if k != "content"}})
                                 if name in ("write_file", "edit_file"):
                                     self.emit(run_id, "step", {"kind": "file", **result})
+                                elif name == "generate_image":
+                                    self.emit(run_id, "step", {"kind": "file", "path": result["path"], "content": "",
+                                                               "lines": 0, "isNew": result["isNew"], "bytes": result["bytes"]})
                                 elif name == "read_file":
                                     self.emit(run_id, "step", {"kind": "read_file", "path": result["path"]})
                                 if name == "fetch_page":

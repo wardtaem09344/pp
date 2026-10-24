@@ -14,12 +14,12 @@ PLANS = {
     "pro": dict(label="Pro", messages=1000, agent=50, research=20, steps=24, concurrent=2,
                 files=50, file_bytes=500000, context=48000, output_tokens=6000,
                 models=["fast", "standard", "advanced"],
-                tools=["calculate", "list_files", "read_file", "write_file", "edit_file", "validate_file", "fetch_page", "search_web", "update_workflow"],
+                tools=["calculate", "list_files", "read_file", "write_file", "edit_file", "validate_file", "generate_image", "fetch_page", "search_web", "update_workflow"],
                 memory=True, resume=True),
     "ultra": dict(label="Ultra", messages=5000, agent=200, research=100, steps=60, concurrent=4,
                   files=200, file_bytes=2000000, context=100000, output_tokens=12000,
                   models=["fast", "standard", "advanced"],
-                  tools=["calculate", "list_files", "read_file", "write_file", "edit_file", "validate_file", "fetch_page", "search_web", "update_workflow"],
+                  tools=["calculate", "list_files", "read_file", "write_file", "edit_file", "validate_file", "generate_image", "fetch_page", "search_web", "update_workflow"],
                   memory=True, resume=True),
 }
 

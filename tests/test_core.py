@@ -368,3 +368,27 @@ def test_credential_fields_never_exposed(setup):
     response=c.get("/api/admin/settings",headers=h)
     assert "password" not in response.text and "token" not in response.text
     assert c.put("/api/admin/settings",headers=h,json={"geminiKey":"not-a-real-key"}).status_code==422
+
+
+def test_generate_image_saves_downloadable_file(setup, monkeypatch):
+    # Synthetic provider response: proves the tool wiring, not a live Gemini call.
+    import base64
+    from server.provider import Provider
+    png = base64.b64encode(b"\x89PNG fixture").decode()
+    async def fake(self, prompt, cancel=lambda: False):
+        return "image/png", png
+    monkeypatch.setattr(Provider, "generate_image", fake)
+    db,p,c=setup
+    u,h=signup(c)
+    u["plan"]="pro"
+    registry=ToolRegistry(db,u,"chat")
+    async def scenario():
+        result=await registry.execute("generate_image",{"prompt":"a red cube","path":"img/cube.png"},call_id="img1",run_id="run")
+        assert result["path"]=="img/cube.png" and result["verified"]
+        read=await registry.execute("read_file",{"path":"img/cube.png"},call_id="img2",run_id="run")
+        assert read["type"]=="image"
+        with pytest.raises(ToolError):
+            await registry.execute("edit_file",{"path":"img/cube.png","old":"x","new":"y"},call_id="img3",run_id="run")
+    asyncio.run(scenario())
+    u["plan"]="plus"
+    assert "generate_image" not in ToolRegistry(db,u,"chat").available()
