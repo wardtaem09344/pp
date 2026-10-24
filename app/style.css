@@ -619,3 +619,11 @@ html.dark .dl.add .sg{color:#4ade80} html.dark .dl.del .sg{color:#f87171}
   .app.agent-mode:not(.has-thread) .composer-wrap{margin-bottom:auto}
 }
 @media (max-width:767px){ .app.agent-mode .code-bg{opacity:.42} html:not(.dark) .app.agent-mode .code-bg{opacity:.36} }
+
+/* Agent mode: calm, plain look. No animated code backdrop, glow or rotating colour border. */
+.code-bg{display:none!important}
+.app.agent-mode .top-mid .mode-toggle,.app.agent-mode .top-mid .mode-thumb{box-shadow:none}
+.app.agent-mode .welcome h1{text-shadow:none}
+.app.agent-mode .thread-inner{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:0}
+.app.agent-mode .composer::before,.app.agent-mode .composer::after{content:none;animation:none}
+.app.agent-mode.mode-switching .composer-wrap{animation:none}

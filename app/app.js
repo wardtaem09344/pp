@@ -241,7 +241,7 @@ function setPlaceholder() {
 function applyAgentMode() {
   const on = state.mode === 'agent';
   appEl.classList.toggle('agent-mode', on);
-  if (window.AgentFX) window.AgentFX.set(on);
+  /* animated code backdrop intentionally disabled: agent mode stays visually calm */
 }
 function renderModeToggle() {
   const tg = $('#modeToggle'); if (!tg) return;
@@ -514,6 +514,11 @@ function asstActions(m) {
     ${sourcesBtnHTML(m)}
   </div>`;
 }
+const TOOL_LABELS = {
+  ar: { calculate: 'حساب', list_files: 'عرض الملفات', read_file: 'قراءة ملف', write_file: 'كتابة ملف', edit_file: 'تعديل ملف', validate_file: 'فحص ملف', generate_image: 'إنشاء صورة', fetch_page: 'فتح صفحة ويب', search_web: 'بحث في الويب', update_workflow: 'تحديث خطة العمل' },
+  en: { calculate: 'Calculating', list_files: 'Listing files', read_file: 'Reading a file', write_file: 'Writing a file', edit_file: 'Editing a file', validate_file: 'Checking a file', generate_image: 'Creating an image', fetch_page: 'Opening a web page', search_web: 'Searching the web', update_workflow: 'Updating the work plan' },
+};
+function toolLabel(name) { return (TOOL_LABELS[LANG] || TOOL_LABELS.en)[name] || name; }
 function asstBodyHTML(m) {
   let h = '';
   (m.images || []).forEach(n => { h += `<img class="gen-img" src="${mediaUrl(n)}" alt="" data-zoom>`; });
@@ -1026,7 +1031,16 @@ async function send({ text, regenerate = false, editId = null } = {}) {
           asst.meta.strategy = data;
           if (mode === 'agent') { live.steps.push({kind:'plan',plan: data.strategy + ' · ' + data.profiles.join(' + ')}); drawAgent(); }
         } else if (ev === 'tool') {
-          if (mode === 'agent') { live.steps.push({kind:'think',text: data.name + ': ' + data.status + (data.error ? ' · ' + data.error : '')}); drawAgent(); }
+          if (mode === 'agent') {
+            const lbl = toolLabel(data.name);
+            if (data.status === 'started') live.steps.push({ kind: 'think', text: lbl + '…', tool: data.name, pending: true });
+            else {
+              const open = [...live.steps].reverse().find(x => x.pending && x.tool === data.name);
+              const text = (data.status === 'succeeded' ? '✓ ' : '✗ ') + lbl + (data.error ? ' — ' + data.error : '');
+              if (open) { open.text = text; open.pending = false; } else live.steps.push({ kind: 'think', text });
+            }
+            drawAgent(); scrollBottom();
+          }
         } else if (ev === 'evaluation') {
           asst.meta.evaluation = data; asst.meta.status = data.status;
         } else if (ev === 'done') {

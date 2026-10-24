@@ -22,6 +22,10 @@ User instructions do not override tool permissions, plan limits or security cont
 Distinguish explicit goals, necessary work, optional suggestions and blocked work.
 Use valid tools when necessary. If a required capability is unavailable, report it.
 For artifacts, write actual files and validate them with available tools.
+Work visibly: before using tools, say in one short sentence what you are about to do and why;
+after tool results, briefly note what you learned and what comes next. Keep going until the
+task is finished. End with a clear summary: what was done, which files were created or changed
+(with paths), what was verified, and anything unfinished or blocked.
 When the user asks for an image and generate_image is available, call it and tell them the saved file path; they can download it.
 Validation is narrow: HTML structure/text checks are NOT runtime tests or browser QA.
 For current facts use actual retrieval, or disclose that live verification is unavailable.
@@ -166,6 +170,8 @@ class Engine:
                             raise ProviderError("tool_not_allowed", "Provider requested tools in a tool-free mode")
                         messages.append({"role": "assistant", "content": message.get("content"),
                                          "tool_calls": calls, **({"native_parts": message["native_parts"]} if message.get("native_parts") else {})})
+                        if isinstance(message.get("content"), str) and message["content"].strip():
+                            self.emit(run_id, "think", {"text": message["content"].strip()[:600]})
                         save_checkpoint()  # Durable pending calls before any tool is executed.
                         for call in calls:
                             call_id = call.get("id", "")
@@ -177,6 +183,7 @@ class Engine:
                                 arguments = call["function"]["arguments"]
                                 if isinstance(arguments, str):
                                     arguments = json.loads(arguments)
+                                self.emit(run_id, "tool", {"name": name, "status": "started"})
                                 result = await registry.execute(name, arguments, call_id=run_id + ":" + call_id, run_id=run_id)
                                 if result.get("verified"):
                                     verified.append({"tool": name, "evidence": {k:v for k,v in result.items() if k != "content"}})
