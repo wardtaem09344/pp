@@ -975,7 +975,13 @@ function voiceMode() {
 
 /* ---------------- Model ---------------- */
 function setModel(id) { const m = MODELS.find(x => x.id === id); if (!m) return; if (m.empty) return toast(t('no_verified_models')); if (m.allowed === false) return openPlans(); state.model = id; store.set('model', id); updateModelBtn(); }
-function updateModelBtn() { const m = MODELS.find(x => x.id === state.model) || MODELS[0]; $('#modelVer').textContent = m.ver; $('#modelVer').classList.toggle('hidden', !m.ver); $('.model-name').textContent = m.brand; }
+function updateModelBtn() {
+  const m = MODELS.find(x => x.id === state.model) || MODELS[0];
+  const version = $('#modelVer');
+  const name = $('.model-name');
+  if (version) { version.textContent = m?.ver || ''; version.classList.toggle('hidden', !m?.ver); }
+  if (name) name.textContent = m?.brand || (LANG === 'ar' ? 'النماذج' : 'Models');
+}
 function modelMenu(anchor) {
   popover(anchor, [
     { head: t('model_head') },
@@ -1380,7 +1386,7 @@ async function onAuthed() {
   LANG = PREFS.lang || LANG; state.theme = PREFS.theme || state.theme;
   if (MODELS.find(m => m.id === PREFS.model && m.allowed)) state.model = PREFS.model;
   if (PREFS.collapsed === '1') appEl.classList.add('collapsed');
-  applyTheme(); applyLang(); updateSend(); renderModeToggle(); autoGrow();
+  applyTheme(); applyLang(); updateModelBtn(); updateSend(); renderModeToggle(); autoGrow();
   await loadChats();
   const id = routeFromHash(); if (id) openChat(id);
   if (!isMobile()) input.focus();
