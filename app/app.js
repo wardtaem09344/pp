@@ -378,32 +378,13 @@ $('#chatList').addEventListener('click', (e) => {
 $('#chatList').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('chat-item')) openChat(e.target.dataset.id); });
 
 function topMenu(anchor) {
-  const modelItems = MODELS.map(m => ({
-    label: t(m.name), sub: t(m.sub), checked: m.id === state.model,
-    run: () => setModel(m.id),
-  }));
   const items = [
     { icon: 'newchat', label: t('new_chat'), run: () => newChat() },
-    { icon: 'agent', label: state.mode === 'agent' ? t('mode_chat') : t('mode_agent'),
-      checked: state.mode === 'agent', run: () => setMode(state.mode === 'agent' ? 'chat' : 'agent') },
-    '-',
-    { head: t('model_head') },
-    ...modelItems,
-    '-',
-    { head: t('agent_tools_head') },
-    { icon: 'pencil', label: t('tool_write'), sub: t('tool_write_sub'), run: () => startAgentPreset('write') },
-    { icon: 'edit', label: t('tool_edit'), sub: t('tool_edit_sub'), run: () => startAgentPreset('edit') },
-    { icon: 'code', label: t('tool_code'), sub: t('tool_code_sub'), run: () => startAgentPreset('code') },
-    { icon: 'cmd', label: t('tool_command'), sub: t('tool_command_sub'), run: () => startAgentPreset('command') },
-    '-',
-    { icon: 'globe', label: t('web_search'), checked: hasTool('search'), run: () => toggleTool('search') },
-    { icon: 'bulb', label: t('thinking'), checked: hasTool('think'), run: () => toggleTool('think') },
-    { icon: 'telescope', label: t('deep_research'), checked: hasTool('research'), run: () => toggleTool('research') },
     { icon: 'temp', label: state.temp ? (LANG === 'ar' ? 'إيقاف الدردشة المؤقتة' : 'Turn off temporary chat') : t('temp_chat'),
       checked: state.temp, run: () => { const temp = $('#tempBtn'); if (temp) temp.click(); } },
   ];
   if (state.chatId && !state.temp) items.push('-', { icon: 'shareSm', label: t('share'), run: () => shareChat(state.chatId) });
-  popover(anchor, items, { align: 'end', width: 300 });
+  popover(anchor, items, { align: 'end', width: 260 });
 }
 
 function chatMenu(anchor, id, item) {
@@ -476,10 +457,11 @@ async function openChat(id) {
 function updateChrome() {
   const has = state.messages.length > 0;
   appEl.classList.toggle('has-thread', has);
-  // The header intentionally stays minimal: only New chat and the vertical menu.
   $('#moreBtn')?.classList.remove('hidden');
   $('#shareBtn')?.classList.add('hidden');
   $('#tempBtn')?.classList.add('hidden');
+  updateModelBtn();
+  syncQuickTools();
 }
 
 /* ---------------- Markdown ---------------- */
