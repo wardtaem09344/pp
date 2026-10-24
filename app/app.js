@@ -39,6 +39,7 @@ const ICONS = {
   share: S('<path d="M10 12.5V3M6.5 6.25L10 2.75l3.5 3.5"/><path d="M5 9.5H4.5a1.75 1.75 0 0 0-1.75 1.75v4.5c0 .97.78 1.75 1.75 1.75h11c.97 0 1.75-.78 1.75-1.75v-4.5c0-.97-.78-1.75-1.75-1.75H15"/>'),
   temp: S('<path d="M10 2.75a7.25 7.25 0 1 1-6.9 5" stroke-dasharray="2.2 2.4"/><path d="M10 6v4l2.5 1.5"/>'),
   dots: S('<circle cx="4.5" cy="10" r="1.1" fill="currentColor"/><circle cx="10" cy="10" r="1.1" fill="currentColor"/><circle cx="15.5" cy="10" r="1.1" fill="currentColor"/>'),
+  dotsV: S('<circle cx="10" cy="4.5" r="1.1" fill="currentColor"/><circle cx="10" cy="10" r="1.1" fill="currentColor"/><circle cx="10" cy="15.5" r="1.1" fill="currentColor"/>'),
   plus: S('<path d="M10 4v12M4 10h12"/>'),
   mic: S('<rect x="7.25" y="2.75" width="5.5" height="9" rx="2.75"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5"/>'),
   voice: `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><rect x="3" y="8" width="2" height="4" rx="1"/><rect x="7" y="5" width="2" height="10" rx="1"/><rect x="11" y="3" width="2" height="14" rx="1"/><rect x="15" y="7" width="2" height="6" rx="1"/></svg>`,
@@ -248,8 +249,8 @@ function applyAgentMode() {
   /* animated code backdrop intentionally disabled: agent mode stays visually calm */
 }
 function renderModeToggle() {
-  const tg = $('#modeToggle'); if (!tg) return;
   applyAgentMode();
+  const tg = $('#modeToggle'); if (!tg) return;
   tg.classList.toggle('agent', state.mode === 'agent');
   $$('.mode-opt', tg).forEach(b => b.classList.toggle('on', b.dataset.m === state.mode));
   const thumb = $('#modeThumb');
@@ -265,7 +266,7 @@ function setMode(m) {
   appEl.classList.add('mode-switching'); clearTimeout(setMode._t); setMode._t = setTimeout(() => appEl.classList.remove('mode-switching'), 900);
   renderModeToggle(); setWelcome(); setPlaceholder(); renderSuggestions();
 }
-$('#modeToggle').addEventListener('click', (e) => { const b = e.target.closest('.mode-opt'); if (b) setMode(b.dataset.m); });
+$('#modeToggle')?.addEventListener('click', (e) => { const b = e.target.closest('.mode-opt'); if (b) setMode(b.dataset.m); });
 
 /* ---------------- Tooltip ---------------- */
 const tip = $('#tooltip'); let tipTimer;
@@ -376,6 +377,35 @@ $('#chatList').addEventListener('click', (e) => {
 });
 $('#chatList').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('chat-item')) openChat(e.target.dataset.id); });
 
+function topMenu(anchor) {
+  const modelItems = MODELS.map(m => ({
+    label: t(m.name), sub: t(m.sub), checked: m.id === state.model,
+    run: () => setModel(m.id),
+  }));
+  const items = [
+    { icon: 'newchat', label: t('new_chat'), run: () => newChat() },
+    { icon: 'agent', label: state.mode === 'agent' ? t('mode_chat') : t('mode_agent'),
+      checked: state.mode === 'agent', run: () => setMode(state.mode === 'agent' ? 'chat' : 'agent') },
+    '-',
+    { head: t('model_head') },
+    ...modelItems,
+    '-',
+    { head: t('agent_tools_head') },
+    { icon: 'pencil', label: t('tool_write'), sub: t('tool_write_sub'), run: () => startAgentPreset('write') },
+    { icon: 'edit', label: t('tool_edit'), sub: t('tool_edit_sub'), run: () => startAgentPreset('edit') },
+    { icon: 'code', label: t('tool_code'), sub: t('tool_code_sub'), run: () => startAgentPreset('code') },
+    { icon: 'cmd', label: t('tool_command'), sub: t('tool_command_sub'), run: () => startAgentPreset('command') },
+    '-',
+    { icon: 'globe', label: t('web_search'), checked: hasTool('search'), run: () => toggleTool('search') },
+    { icon: 'bulb', label: t('thinking'), checked: hasTool('think'), run: () => toggleTool('think') },
+    { icon: 'telescope', label: t('deep_research'), checked: hasTool('research'), run: () => toggleTool('research') },
+    { icon: 'temp', label: state.temp ? (LANG === 'ar' ? 'إيقاف الدردشة المؤقتة' : 'Turn off temporary chat') : t('temp_chat'),
+      checked: state.temp, run: () => { const temp = $('#tempBtn'); if (temp) temp.click(); } },
+  ];
+  if (state.chatId && !state.temp) items.push('-', { icon: 'shareSm', label: t('share'), run: () => shareChat(state.chatId) });
+  popover(anchor, items, { align: 'end', width: 300 });
+}
+
 function chatMenu(anchor, id, item) {
   const c = state.chats.find(x => x.id === id); if (!c) return;
   item?.classList.add('menu-open');
@@ -446,9 +476,10 @@ async function openChat(id) {
 function updateChrome() {
   const has = state.messages.length > 0;
   appEl.classList.toggle('has-thread', has);
-  $('#shareBtn').classList.toggle('hidden', !has || state.temp);
-  $('#moreBtn').classList.toggle('hidden', !has || state.temp);
-  $('#tempBtn').classList.toggle('hidden', has && !state.temp);
+  // The header intentionally stays minimal: only New chat and the vertical menu.
+  $('#moreBtn')?.classList.remove('hidden');
+  $('#shareBtn')?.classList.add('hidden');
+  $('#tempBtn')?.classList.add('hidden');
 }
 
 /* ---------------- Markdown ---------------- */
@@ -1298,7 +1329,7 @@ document.addEventListener('click', (e) => {
     case 'dictate': dictate(); break;
     case 'scroll-bottom': thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' }); break;
     case 'share': state.chatId && shareChat(state.chatId); break;
-    case 'chat-more': state.chatId && chatMenu(b, state.chatId, null); break;
+    case 'chat-more': topMenu(b); break;
     case 'temp': state.temp = !state.temp; b.classList.toggle('on', state.temp); b.dataset.tip = state.temp ? (LANG === 'ar' ? 'إيقاف الدردشة المؤقتة' : 'Turn off temporary chat') : 'temp_chat'; STR[LANG][b.dataset.tip] ||= b.dataset.tip; setWelcome(); break;
   }
 });
