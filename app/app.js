@@ -100,7 +100,7 @@ const STR = {
     temp_title: 'دردشة مؤقتة', temp_note: 'تخفي الواجهة هذه الدردشة أثناء الجلسة وتحاول حذفها عند الانتقال. قد تبقى بيانات على الخادم إذا أُغلقت الصفحة؛ وتخضع معالجة الرسائل لسياسة مزوّد النموذج.',
     add_photos: 'إضافة صور وملفات', create_image: 'إنشاء صورة', thinking: 'فكّر لفترة أطول', deep_research: 'بحث متعمق', web_search: 'بحث في الويب', more: 'المزيد',
     agent_tools_head: 'أدوات الوكيل', tool_write: 'الكتابة', tool_write_sub: 'إنشاء نص أو مسودة', tool_edit: 'التحرير والتعديل', tool_edit_sub: 'تحسين نص أو ملف موجود', tool_code: 'كتابة الأكواد', tool_code_sub: 'إنشاء أو تعديل ملفات برمجية', tool_command: 'تنفيذ أوامر', tool_command_sub: 'تشغيل أمر ضمن بيئة الوكيل',
-    preset_write: 'ساعدني في كتابة النص التالي. اسألني عن التفاصيل الناقصة عند الحاجة:\\n', preset_edit: 'ساعدني في تحرير النص أو الملف التالي وتحسينه. سأضيف المحتوى أو التفاصيل بعد ذلك:\\n', preset_code: 'اكتب أو عدّل الكود المطلوب. وضّح الملفات والتغييرات، ثم اختبرها إن أمكن:\\n', preset_command: 'أريد تنفيذ أمر ضمن بيئة المشروع. اشرح الأمر المقترح وآثاره قبل تشغيل أي أمر يغيّر الملفات أو البيئة:\\n',
+    preset_write: 'ساعدني في كتابة النص التالي. اسألني عن التفاصيل الناقصة عند الحاجة:\n', preset_edit: 'ساعدني في تحرير النص أو الملف التالي وتحسينه. سأضيف المحتوى أو التفاصيل بعد ذلك:\n', preset_code: 'اكتب أو عدّل الكود المطلوب. وضّح الملفات والتغييرات، ثم اختبرها إن أمكن:\n', preset_command: 'أريد تنفيذ أمر ضمن بيئة المشروع. اشرح الأمر المقترح وآثاره قبل تشغيل أي أمر يغيّر الملفات أو البيئة:\n',
     image_chip: 'صورة', think_chip: 'تفكير', search_chip: 'بحث', research_chip: 'بحث متعمق',
     copy: 'نسخ', copied: 'تم النسخ', edit: 'تعديل الرسالة', good: 'رد جيد', bad: 'رد سيئ', read: 'قراءة بصوت عالٍ', stop_read: 'إيقاف', regen: 'إعادة المحاولة', share_msg: 'مشاركة',
     cancel: 'إلغاء', send: 'إرسال', copy_code: 'نسخ الرمز', code_copied: 'تم النسخ',
@@ -152,7 +152,7 @@ const STR = {
     temp_title: 'Temporary Chat', temp_note: 'The interface hides this chat during the session and attempts deletion when navigating away. Data can remain on the server if the page closes; model-provider processing follows its own policy.',
     add_photos: 'Add photos & files', create_image: 'Create image', thinking: 'Think longer', deep_research: 'Deep research', web_search: 'Web search', more: 'More',
     agent_tools_head: 'Agent tools', tool_write: 'Writing', tool_write_sub: 'Create a draft or text', tool_edit: 'Edit and revise', tool_edit_sub: 'Improve existing text or files', tool_code: 'Write code', tool_code_sub: 'Create or edit code files', tool_command: 'Run commands', tool_command_sub: 'Run a command in the agent environment',
-    preset_write: 'Help me write the following. Ask for missing details when needed:\\n', preset_edit: 'Help me revise and improve the following text or file. I will add the content or details next:\\n', preset_code: 'Write or modify the requested code. Explain the files and changes, then test them if possible:\\n', preset_command: 'I want to run a command in the project environment. Explain the proposed command and its effects before running anything that changes files or the environment:\\n',
+    preset_write: 'Help me write the following. Ask for missing details when needed:\n', preset_edit: 'Help me revise and improve the following text or file. I will add the content or details next:\n', preset_code: 'Write or modify the requested code. Explain the files and changes, then test them if possible:\n', preset_command: 'I want to run a command in the project environment. Explain the proposed command and its effects before running anything that changes files or the environment:\n',
     image_chip: 'Image', think_chip: 'Think', search_chip: 'Search', research_chip: 'Research',
     copy: 'Copy', copied: 'Copied', edit: 'Edit message', good: 'Good response', bad: 'Bad response', read: 'Read aloud', stop_read: 'Stop', regen: 'Try again', share_msg: 'Share',
     cancel: 'Cancel', send: 'Send', copy_code: 'Copy code', code_copied: 'Copied',
@@ -838,6 +838,7 @@ const TOOLS = { image: { chip: 'image_chip', icon: 'image' }, think: { chip: 'th
 /* tools are multi-select: Thinking can be combined with Search (wider, deeper search) */
 const hasTool = (k) => state.tools.includes(k);
 function toggleTool(k) {
+  if (state.mode === 'agent') setMode('chat');
   if (hasTool(k)) state.tools = state.tools.filter(x => x !== k);
   else {
     if (k === 'image') state.tools = [k];                       // image generation is standalone
