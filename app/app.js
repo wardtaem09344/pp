@@ -577,7 +577,8 @@ function statusHTML(m) {
   if (meta.mode === 'search' && meta.think) {
     const n = (meta.sources || []).length;
     return `<details class="research-done"><summary>${icon('bulb')}<span>${esc(t('wide_search'))} · ${esc(fmtDur(meta.seconds))}${n ? ' · ' + esc(t('sources_n', n)) : ''}</span>${icon('chevron')}</summary>
-      <div class="rs-body">${(meta.queries || []).map(q => `<div class="rs-q">${iconSz('search', 14)}<span dir="auto">${esc(q)}</span></div>`).join('')}
+      <div class="rs-body"><div class="think-summary-note">${LANG === 'ar' ? 'ملخص النشاط: يعرض استعلامات البحث والمصادر التي استُخدمت، وليس التفكير الداخلي الخاص.' : 'Activity summary: shows the search queries and sources used, not private internal reasoning.'}</div>
+      ${(meta.queries || []).map(q => `<div class="rs-q">${iconSz('search', 14)}<span dir="auto">${esc(q)}</span></div>`).join('')}
       <div class="rs-favs">${(meta.sources || []).slice(0, 12).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener" class="rs-src"><img src="${fav(s.domain)}" alt="">${esc(shortDomain(s.domain))}</a>`).join('')}</div></div></details>`;
   }
   if (meta.mode === 'research') {
