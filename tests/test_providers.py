@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from server.db import Database
-from server.provider import Provider, ProviderError
+from server.provider import Provider, ProviderError, rank_gemini_candidates
 
 
 @pytest.fixture
@@ -162,3 +162,18 @@ def test_model_resolution_requires_verified_catalog(monkeypatch):
     provider = Provider(Database(":memory:"))
     assert provider.models() == []
     assert provider.tier("fast") == "fast"
+
+
+def test_gemini_discovery_prioritizes_new_models_without_assuming_they_work():
+    # A long candidate list previously let alphabetical ordering crowd newer
+    # models out of the 24-probe limit. Priority must affect probing only; it
+    # does not mark any model verified by itself.
+    candidates = [(f"gemini-3.0-flash-{i:02d}", f"Old {i}", "fast") for i in range(40)]
+    candidates += [("gemini-4-argon", "Gemini 4 Argon", "standard"),
+                   ("gemini-3.8-flash", "Gemini 3.8 Flash", "fast")]
+    ranked = rank_gemini_candidates(candidates)
+    ids = [item[0] for item in ranked]
+    assert len(ranked) == 36
+    assert ids[:2] == ["gemini-4-argon", "gemini-3.8-flash"]
+    assert all(item[0] not in {"gemini-4-argon", "gemini-3.8-flash"} or item in ranked
+               for item in candidates)
