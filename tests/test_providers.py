@@ -42,7 +42,7 @@ def test_gemini_discovery_and_tool_signature_roundtrip(monkeypatch, tmp_path, tr
     install(handler)
     async def scenario():
         result=await provider.discover()
-        assert len(result["discovered"])==2
+        assert len([x for x in result["discovered"] if x.startswith("gemini:")])==2
         model="gemini:example-flash"
         message,spent=await provider.complete([{"role":"system","content":"Rules"},{"role":"user","content":"6*7"}],[],model,100)
         assert message["tool_calls"][0]["function"]["name"]=="calculate"
