@@ -50,33 +50,14 @@ class Provider:
                           ((self.key or (self.proxy_url and self.proxy_token)) and configured_models()))
 
     def models(self):
-        result = [{**m, "tier": m["id"], "provider": "openai", "status": "configured"}
-                  for m in configured_models()]
-        if self.gemini_key or self.gemini_url:
-            if not result:
-                # With ai-seek configured, DeepSeek is the durable default "fast"
-                # model; Gemini stays selectable under its own id. Without ai-seek,
-                # Gemini keeps the "fast" id so a default chat remains possible.
-                gemini_id = "fast" if not (self.seek_key or self.seek_url) else "gemini:gemini-3.8-flash"
-                result.append({"id": gemini_id, "provider": "gemini",
-                    "provider_model": "gemini-3.8-flash", "label": "Gemini 3.8 Flash",
-                    "tier": "fast", "status": "configured-not-yet-verified"})
-        if self.seek_key or self.seek_url:
-            from .provider_probe import AISEEK_MODELS
-            for model in AISEEK_MODELS.values():
-                tier = "advanced" if model.startswith("anthropic/") else "standard" if model.startswith("grok/") else "fast"
-                result.append({"id": "aiseek:" + model, "provider": "aiseek", "provider_model": model,
-                               "label": model, "tier": tier, "status": "provided-candidate"})
-            if not any(m["id"] == "fast" for m in result):
-                result.append({"id": "fast", "provider": "aiseek", "provider_model": AISEEK_MODELS["deepseek"],
-                               "label": "DeepSeek", "tier": "fast", "status": "provided-candidate"})
-        if self.db:
-            for r in self.db.all("SELECT * FROM provider_models ORDER BY label"):
-                row = {"id": r["id"], "provider": r["provider"], "provider_model": r["model"],
-                       "label": r["label"], "tier": r["tier"], "status": r["status"]}
-                result = [m for m in result if m["id"] != row["id"]]
-                result.append(row)
-        return result
+        # Only expose models whose live generation probe succeeded. Candidate names
+        # stay private to discovery and cannot be selected by a client.
+        if not self.db:
+            return []
+        rows = self.db.all("SELECT * FROM provider_models WHERE status='verified' ORDER BY label")
+        return [{"id": r["id"], "provider": r["provider"], "provider_model": r["model"],
+                 "label": r["label"], "tier": r["tier"], "status": r["status"]}
+                for r in rows]
 
     def tier(self, model):
         return next((m["tier"] for m in self.models() if m["id"] == model), model)
@@ -87,40 +68,135 @@ class Provider:
         return base.rstrip("/") + path, headers
 
     async def discover(self):
+        """Replace the catalogue with models that pass a real minimal generation."""
         if not self.db:
             raise ProviderError("no_catalog_storage", "Model catalogue storage unavailable")
-        discovered = []
-        if self.gemini_key or self.gemini_url:
-            token = ""
-            async with httpx.AsyncClient(timeout=30) as client:
-                for _ in range(10):
-                    endpoint, headers = self._gemini_endpoint("/v1beta/models")
-                    response = await client.get(endpoint, headers=headers, params={"pageSize": 100, **({"pageToken": token} if token else {})})
-                    if response.status_code in (401, 403):
-                        raise ProviderError("gemini_auth", "Gemini refused model listing; check the saved key and header")
-                    response.raise_for_status()
-                    data = response.json()
-                    for m in data.get("models", []):
-                        if "generateContent" not in m.get("supportedGenerationMethods", []):
-                            continue
-                        model = m["name"].removeprefix("models/")
-                        # Models whose purpose is media generation are not text-chat claims.
-                        if any(w in model.lower() for w in ("image", "tts", "robotics", "computer-use", "live", "audio", "aqa")):
-                            continue
-                        tier = "advanced" if "pro" in model else "fast" if "flash" in model else "standard"
-                        entry = ("gemini:" + model, "gemini", model, m.get("displayName", model),
-                                 tier, "listed-by-provider", time.time())
-                        self.db.execute("""INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)
-                        ON CONFLICT(id) DO UPDATE SET label=excluded.label,tier=excluded.tier,
-                        status=excluded.status,updated=excluded.updated""", entry)
-                        discovered.append(entry[0])
-                    token = data.get("nextPageToken", "")
-                    if not token:
-                        break
-        # ai-seek has no confirmed model-discovery endpoint. Candidate names come
-        # from the user's wrapper, and must never be labelled provider-discovered.
+        self.db.execute("DELETE FROM provider_models")
+        discovered, checked = [], 0
+        probe_messages = [{"role": "user", "content": "Reply with exactly APEX_OK."}]
+
+        def save(model_id, provider, provider_model, label, tier):
+            self.db.execute("""INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,model=excluded.model,
+                label=excluded.label,tier=excluded.tier,status=excluded.status,updated=excluded.updated""",
+                (model_id, provider, provider_model, label, tier, "verified", time.time()))
+            discovered.append(model_id)
+
+        def save_fast_alias(provider, provider_model, label):
+            if not self.db.one("SELECT id FROM provider_models WHERE id='fast'"):
+                save("fast", provider, provider_model, label + " · Fast default", "fast")
+
+        # Gemini's model list is only a candidate list; each candidate must generate.
+        if self.gemini_key or (self.gemini_url and self.gemini_proxy_key):
+            try:
+                token, candidates = "", []
+                async with httpx.AsyncClient(timeout=httpx.Timeout(20, connect=8)) as client:
+                    for _ in range(10):
+                        endpoint, headers = self._gemini_endpoint("/v1beta/models")
+                        response = await client.get(endpoint, headers=headers,
+                            params={"pageSize": 100, **({"pageToken": token} if token else {})})
+                        if response.status_code in (401, 403):
+                            raise ProviderError("gemini_auth", "Gemini refused model listing; check the server-side key")
+                        response.raise_for_status()
+                        data = response.json()
+                        for item in data.get("models", []):
+                            if "generateContent" not in item.get("supportedGenerationMethods", []):
+                                continue
+                            name = item.get("name", "").removeprefix("models/")
+                            if not name or any(w in name.lower() for w in
+                                ("image", "tts", "robotics", "computer-use", "live", "audio", "aqa", "embedding")):
+                                continue
+                            tier = "advanced" if "pro" in name.lower() else "fast" if "flash" in name.lower() else "standard"
+                            candidates.append((name, item.get("displayName", name), tier))
+                        token = data.get("nextPageToken", "")
+                        if not token:
+                            break
+                candidates = sorted(candidates, key=lambda x: (0 if x[2] == "fast" else 1, x[0]))[:24]
+                semaphore = asyncio.Semaphore(6)
+                async def test_gemini(candidate):
+                    name, label, tier = candidate
+                    async with semaphore:
+                        match = {"id": "gemini:" + name, "provider": "gemini",
+                                 "provider_model": name, "label": label, "tier": tier}
+                        try:
+                            message, _ = await asyncio.wait_for(
+                                self._gemini(probe_messages, [], match, 32, lambda: False), timeout=12)
+                            return (name, label, tier) if "APEX_OK" in (message.get("content") or "") else None
+                        except Exception:
+                            return None
+                results = await asyncio.gather(*(test_gemini(c) for c in candidates))
+                checked += len(candidates)
+                for result in results:
+                    if not result:
+                        continue
+                    name, label, tier = result
+                    save("gemini:" + name, "gemini", name, label, tier)
+                    if tier == "fast":
+                        save_fast_alias("gemini", name, label)
+            except Exception:
+                # A failed connection must not leave guessed models in the picker.
+                pass
+
+        # ai-seek has no documented model-list API in the supplied integration.
+        # Names are candidates only; expose those returning the test phrase.
+        if self.seek_key or (self.seek_url and self.seek_proxy_key):
+            from .provider_probe import AISEEK_MODELS
+            semaphore = asyncio.Semaphore(6)
+            async def test_aiseek(model):
+                async with semaphore:
+                    tier = ("advanced" if model.startswith("anthropic/") else
+                            "standard" if model.startswith(("grok/", "openai/", "qwen/qwen-coder")) else "fast")
+                    match = {"id": "aiseek:" + model, "provider": "aiseek",
+                             "provider_model": model, "label": model, "tier": tier}
+                    try:
+                        message, _ = await asyncio.wait_for(
+                            self._aiseek(probe_messages, [], match, 32, lambda: False), timeout=12)
+                        return (model, tier) if "APEX_OK" in (message.get("content") or "") else None
+                    except Exception:
+                        return None
+            results = await asyncio.gather(*(test_aiseek(model) for model in AISEEK_MODELS.values()))
+            checked += len(results)
+            for result in results:
+                if not result:
+                    continue
+                model, tier = result
+                label = model.split("/", 1)[-1]
+                save("aiseek:" + model, "aiseek", model, label, tier)
+                if tier == "fast":
+                    save_fast_alias("aiseek", model, label)
+
+        # OpenAI-compatible models are verified by a real completion, not by env presence.
+        if self.key or (self.proxy_url and self.proxy_token):
+            candidates = configured_models()
+            semaphore = asyncio.Semaphore(4)
+            async def test_compatible(candidate):
+                async with semaphore:
+                    endpoint = ((self.proxy_url.rstrip("/") + "/v1/chat/completions")
+                                if self.proxy_url else self.base + "/chat/completions")
+                    if urlparse(endpoint).scheme != "https":
+                        return None
+                    headers = ({"x-api-key": self.proxy_token} if self.proxy_url
+                               else {"Authorization": "Bearer " + self.key})
+                    body = {"model": candidate["provider_model"],
+                            "messages": probe_messages, "max_tokens": 32}
+                    try:
+                        async with httpx.AsyncClient(timeout=httpx.Timeout(12, connect=6)) as client:
+                            response = await client.post(endpoint, json=body, headers=headers)
+                        if response.status_code != 200:
+                            return None
+                        content = response.json()["choices"][0]["message"].get("content") or ""
+                        return candidate if "APEX_OK" in content else None
+                    except Exception:
+                        return None
+            results = await asyncio.gather(*(test_compatible(c) for c in candidates))
+            checked += len(candidates)
+            for candidate in results:
+                if candidate:
+                    save(candidate["id"], "openai", candidate["provider_model"],
+                         candidate["label"], candidate["id"])
         return {"discovered": discovered, "models": self.models(),
-                "aiseek_discovery": "No documented listing endpoint supplied; seven candidates from user integration, not an exhaustive provider catalogue."}
+                "checked_candidates": checked, "verified_only": True,
+                "note": "Only models that returned APEX_OK during this refresh are listed."}
 
     async def _gemini(self, messages, tools, match, output_tokens, cancel):
         system = "\n".join(m.get("content", "") for m in messages if m["role"] == "system")
