@@ -87,36 +87,13 @@
     <canvas id="codeBg" class="code-bg" aria-hidden="true"></canvas>
 
     <header class="topbar">
-      <div class="top-start">
-        <button class="icon-btn mobile-only" data-act="toggle-sidebar" aria-label="menu"><span data-icon="menu"></span></button>
-        <button class="model-btn" data-act="model-menu" aria-haspopup="menu">
-          <span class="model-name"></span><span class="model-ver" id="modelVer"></span>
-          <span data-icon="chevron"></span>
-        </button>
+      <div class="topbar-actions" aria-label="Chat actions">
+        <button class="icon-btn" data-act="new-chat" data-tip="new_chat" aria-label="New chat"><span data-icon="newchat"></span></button>
+        <button class="icon-btn" id="moreBtn" data-act="chat-more" data-tip="more" aria-label="More options" aria-haspopup="menu"><span data-icon="dotsV"></span></button>
       </div>
-
-      <!-- Chat / Agent switch: lives at the very top of the interface -->
-      <div class="top-mid">
-        <div class="mode-toggle" id="modeToggle" role="tablist">
-          <span class="mode-thumb" id="modeThumb"></span>
-          <button type="button" class="mode-opt on" data-m="chat" role="tab"><span data-icon="chat"></span><span data-t="mode_chat"></span></button>
-          <button type="button" class="mode-opt" data-m="agent" role="tab"><span data-icon="agent"></span><span data-t="mode_agent"></span></button>
-        </div>
-        <div class="top-tools" role="group" aria-label="Quick tools">
-          <button type="button" class="top-tool" data-act="quick-tool" data-tool="search" data-tip="web_search" aria-pressed="false"><span data-icon="globe"></span><span data-t="web_search"></span></button>
-          <button type="button" class="top-tool" data-act="quick-tool" data-tool="think" data-tip="thinking" aria-pressed="false"><span data-icon="bulb"></span><span data-t="thinking"></span></button>
-          <button type="button" class="top-tool" data-act="quick-tool" data-tool="research" data-tip="deep_research" aria-pressed="false"><span data-icon="telescope"></span><span data-t="deep_research"></span></button>
-          <button type="button" class="top-tool" data-act="quick-tool" data-tool="image" data-tip="create_image" aria-pressed="false"><span data-icon="image"></span><span data-t="create_image"></span></button>
-        </div>
-      </div>
-
-      <div class="top-end">
-        <button class="plan-pill" data-act="plans" data-testid="button-plans" aria-label="Plans">Free</button>
-        <button class="icon-btn" data-act="runs" aria-label="Task runs" title="APEX runs"><span data-icon="agentRun"></span></button>
-        <button class="icon-btn hidden" id="shareBtn" data-act="share" data-tip="share" aria-label="share"><span data-icon="share"></span></button>
-        <button class="icon-btn hidden" id="moreBtn" data-act="chat-more" aria-label="more"><span data-icon="dots"></span></button>
-        <button class="icon-btn" id="tempBtn" data-act="temp" data-tip="temp_chat" aria-label="temporary chat"><span data-icon="temp"></span></button>
-      </div>
+      <!-- Kept as hidden compatibility controls; all options are in the vertical menu. -->
+      <button class="icon-btn hidden" id="shareBtn" data-act="share" aria-hidden="true" tabindex="-1" hidden><span data-icon="share"></span></button>
+      <button class="icon-btn hidden" id="tempBtn" data-act="temp" aria-hidden="true" tabindex="-1" hidden><span data-icon="temp"></span></button>
     </header>
 
     <section id="thread" class="thread">
