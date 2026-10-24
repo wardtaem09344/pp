@@ -35,3 +35,12 @@
 .apex-scroll-hint{display:none}
 @media(max-width:600px){.apex-scroll-hint{display:block}}
 @media(max-width:600px){.apex-run{align-items:start;flex-direction:column}.apex-wide .modal-b{padding:var(--space-3)}.top-end{gap:4px}.plan-pill{padding-inline:8px}.apex-usage{gap:var(--space-3)}.top-end [data-act="runs"]{display:none}.top-mid .mode-opt{padding-inline:8px}.model-btn{max-width:130px}.model-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
+/* Minimal Claude-style chat header: two controls in one corner. */
+.topbar{justify-content:flex-start;gap:0;padding-inline:12px}
+.topbar-actions{display:flex;align-items:center;gap:4px}
+.topbar-actions .icon-btn{width:38px;height:38px;border-radius:11px}
+.topbar-actions .icon-btn:hover{background:var(--hover)}
+.topbar-actions [data-icon="dotsV"] svg{width:19px;height:19px}
+#moreBtn{display:inline-flex!important}
+@media(max-width:767px){.topbar{height:50px;padding-inline:10px}.topbar-actions{gap:2px}}
