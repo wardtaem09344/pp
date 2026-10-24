@@ -248,6 +248,16 @@ def create_app(database=None, provider=None):
                              "parallel_agents": False, "memory": plan["memory"], "resume": plan["resume"]},
                 "limits": plan, "storage": "postgresql" if db.pg else "sqlite-development"}
 
+    @app.get("/api/models")
+    def verified_models(request: Request):
+        # Keep model loading independent from the broader capabilities response.
+        # The chat UI can still populate its picker if a tool inventory fails.
+        user = current_user(request)
+        plan = entitlement(user)
+        models = [{**m, "allowed": m.get("tier", m["id"]) in plan["models"]}
+                  for m in provider.models()]
+        return {"provider_ready": provider.ready, "models": models}
+
     @app.get("/api/chats")
     def chats(request: Request, q: str = ""):
         user = current_user(request)
