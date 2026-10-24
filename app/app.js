@@ -865,8 +865,8 @@ function startImageGeneration() {
   state.tools = [];
   renderToolChip();
   fillPrompt(LANG === 'ar'
-    ? 'أنشئ صورة باستخدام أداة توليد الصور الفعلية بناءً على الوصف التالي. احفظها في images/generated.png وأعطني رابط تنزيل الملف. إذا فشلت الأداة، اذكر الفشل ولا تدّعِ نجاحًا.\\n\\n'
-    : 'Generate an image using the actual image-generation tool from the prompt below. Save it as images/generated.png and provide the download link. If the tool fails, report the failure without claiming success.\\n\\n');
+    ? 'أنشئ صورة باستخدام أداة توليد الصور الفعلية بناءً على الوصف التالي. احفظها في images/generated.png وأعطني رابط تنزيل الملف. إذا فشلت الأداة، اذكر الفشل ولا تدّعِ نجاحًا.\n\n'
+    : 'Generate an image using the actual image-generation tool from the prompt below. Save it as images/generated.png and provide the download link. If the tool fails, report the failure without claiming success.\n\n');
 }
 function toolIsAvailable(name) {
   return Array.isArray(capabilities?.tools) && capabilities.tools.some(tool => tool.name === name);
