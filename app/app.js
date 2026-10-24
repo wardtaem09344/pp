@@ -1580,7 +1580,7 @@ if (window.ResizeObserver) new ResizeObserver(() => renderModeToggle()).observe(
   } catch {}
   try {
     const r = await api('/api/auth/me');
-    if (r.ok) { state.user = (await r.json()).user; await onAuthed(); }
+    if (r.ok) { state.user = (await r.json()).user; hideAuth(); await onAuthed(); }
     else authFail();
   } catch { authFail(); }
 })();
