@@ -824,7 +824,7 @@ sendBtn.addEventListener('click', () => {
 const fileInput = $('#fileInput');
 fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
 function addFiles(files) {
-  if (capabilities && !capabilities.features.vision) { toast(LANG === 'ar' ? 'تحليل المرفقات غير موصول بمزوّد حاليًا' : 'Vision is not configured'); return; }
+  if (!capabilities?.features?.vision) { toast(LANG === 'ar' ? 'تحليل المرفقات غير موصول حاليًا' : 'Image attachments are not configured'); return; }
   files.filter(f => f.type.startsWith('image/')).slice(0, 4 - state.attachments.length).forEach(f => {
     const rd = new FileReader(); rd.onload = () => downscale(rd.result).then(d => { state.attachments.push(d); renderAttachments(); }); rd.readAsDataURL(f);
   });
@@ -850,21 +850,60 @@ const comp = $('#composer');
 const TOOLS = { image: { chip: 'image_chip', icon: 'image' }, think: { chip: 'think_chip', icon: 'bulb' }, search: { chip: 'search_chip', icon: 'globe' }, research: { chip: 'research_chip', icon: 'telescope' } };
 /* tools are multi-select: Thinking can be combined with Search (wider, deeper search) */
 const hasTool = (k) => state.tools.includes(k);
+function startImageGeneration() {
+  const configured = !!capabilities?.features?.image_generation &&
+    capabilities?.tools?.some(tool => tool.name === 'generate_image');
+  if (!configured) {
+    toast(LANG === 'ar'
+      ? 'توليد الصور يحتاج خطة Pro أو Ultra وإعداد Gemini على الخادم.'
+      : 'Image generation requires a Pro/Ultra plan and Gemini configured on the server.');
+    return;
+  }
+  // The chat/image endpoint intentionally rejects direct image requests. Route
+  // through the real agent tool instead, which returns a saved downloadable file.
+  setMode('agent');
+  state.tools = [];
+  renderToolChip();
+  fillPrompt(LANG === 'ar'
+    ? 'أنشئ صورة باستخدام أداة توليد الصور الفعلية بناءً على الوصف التالي. احفظها في images/generated.png وأعطني رابط تنزيل الملف. إذا فشلت الأداة، اذكر الفشل ولا تدّعِ نجاحًا.\\n\\n'
+    : 'Generate an image using the actual image-generation tool from the prompt below. Save it as images/generated.png and provide the download link. If the tool fails, report the failure without claiming success.\\n\\n');
+}
+function toolIsAvailable(name) {
+  return Array.isArray(capabilities?.tools) && capabilities.tools.some(tool => tool.name === name);
+}
 function toggleTool(k) {
+  if (k === 'image') { startImageGeneration(); return; }
+  if (k === 'search' && !toolIsAvailable('search_web')) {
+    toast(LANG === 'ar' ? 'بحث الويب غير مهيأ: يلزم مفتاح Brave Search على الخادم.' : 'Web search is not configured: a server-side Brave Search key is required.');
+    return;
+  }
+  if (k === 'research' && !toolIsAvailable('search_web') && !toolIsAvailable('fetch_page')) {
+    toast(LANG === 'ar' ? 'البحث المتعمق غير متاح في الخطة أو إعدادات الخادم الحالية.' : 'Deep research is unavailable for this plan or server configuration.');
+    return;
+  }
   if (state.mode === 'agent') setMode('chat');
   if (hasTool(k)) state.tools = state.tools.filter(x => x !== k);
   else {
-    if (k === 'image') state.tools = [k];                       // image generation is standalone
-    else {
-      state.tools = state.tools.filter(x => x !== 'image');
-      if (k === 'search') state.tools = state.tools.filter(x => x !== 'research');
-      if (k === 'research') state.tools = state.tools.filter(x => x !== 'search');
-      state.tools.push(k);
-    }
+    state.tools = state.tools.filter(x => x !== 'image');
+    if (k === 'search') state.tools = state.tools.filter(x => x !== 'research');
+    if (k === 'research') state.tools = state.tools.filter(x => x !== 'search');
+    state.tools.push(k);
   }
   renderToolChip(); setPlaceholder(); input.focus();
 }
-function setTool(k) { state.tools = k ? [k] : []; renderToolChip(); setPlaceholder(); input.focus(); }
+function setTool(k) {
+  if (k === 'image') { startImageGeneration(); return; }
+  if (k === 'search' && !toolIsAvailable('search_web')) {
+    toast(LANG === 'ar' ? 'بحث الويب غير مهيأ: يلزم مفتاح Brave Search على الخادم.' : 'Web search is not configured: a server-side Brave Search key is required.');
+    return;
+  }
+  if (k === 'research' && !toolIsAvailable('search_web') && !toolIsAvailable('fetch_page')) {
+    toast(LANG === 'ar' ? 'البحث المتعمق غير متاح في الخطة أو إعدادات الخادم الحالية.' : 'Deep research is unavailable for this plan or server configuration.');
+    return;
+  }
+  state.tools = k ? [k] : [];
+  renderToolChip(); setPlaceholder(); input.focus();
+}
 function clearTool(k) { state.tools = k ? state.tools.filter(x => x !== k) : []; renderToolChip(); setPlaceholder(); }
 function renderToolChip() {
   const box = $('#toolChips');
@@ -895,7 +934,7 @@ function startAgentPreset(kind) {
 function plusMenu(anchor) {
   popover(anchor, [
     { head: LANG === 'ar' ? 'إضافة إلى المحادثة' : 'Add to chat' },
-    { icon: 'clip', label: t('add_photos'), run: () => fileInput.click() },
+    { icon: 'clip', label: t('add_photos'), run: () => { if (!capabilities?.features?.vision) { toast(LANG === 'ar' ? 'تحليل المرفقات غير موصول حاليًا' : 'Image attachments are not configured'); return; } fileInput.click(); } },
     '-',
     { icon: 'globe', label: t('web_search'), checked: hasTool('search'), run: () => toggleTool('search') },
     { icon: 'telescope', label: t('deep_research'), checked: hasTool('research'), run: () => toggleTool('research') },
