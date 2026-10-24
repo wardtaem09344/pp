@@ -16,6 +16,7 @@ AISEEK_MODELS = {
     "qwen-coder": "qwen/qwen-coder-32b",
     "grok": "grok/grok-4-fast",
     "gpt-5": "openai/gpt-5-mini",
+    "claude": "anthropic/claude-3.5-sonnet",
 }
 
 
