@@ -69,3 +69,7 @@
  .composer-model-btn{max-width:104px}
  .composer-model-btn .model-name{max-width:59px}
 }
+
+/* Keep the two mode labels visible even on narrow screens. */
+.topbar .top-mid .mode-opt{width:auto!important}
+.topbar .top-mid .mode-opt>span[data-t]{display:inline!important}
