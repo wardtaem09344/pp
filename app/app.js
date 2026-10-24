@@ -983,10 +983,18 @@ function updateModelBtn() {
   if (name) name.textContent = m?.brand || (LANG === 'ar' ? 'النماذج' : 'Models');
 }
 function modelMenu(anchor) {
-  popover(anchor, [
-    { head: t('model_head') },
-    ...MODELS.map(m => ({ label: t(m.name), sub: t(m.sub), checked: m.id === state.model, run: () => setModel(m.id) })),
-  ], { width: 300 });
+  const available = MODELS.filter(m => !m.empty);
+  const items = [
+    { head: LANG === 'ar' ? 'النماذج المتصلة' : 'Connected models' },
+    ...available.map(m => ({
+      label: m.brand || m.label || m.name,
+      sub: (m.provider ? String(m.provider).toUpperCase() + ' · ' : '') + (m.sub || ''),
+      checked: m.id === state.model,
+      run: () => setModel(m.id),
+    })),
+  ];
+  if (!available.length) items.push({ label: t('no_verified_models'), sub: t('connect_provider'), disabled: true });
+  popover(anchor, items, { width: 320, side: isMobile() ? 'top' : 'bottom' });
 }
 
 /* ---------------- Sending & streaming ---------------- */
