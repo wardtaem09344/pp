@@ -977,6 +977,7 @@ function stopStream() {
 }
 async function send({ text, regenerate = false, editId = null } = {}) {
   if (state.streaming) return;
+  if (!MODELS.some(m => m.id === state.model && !m.empty)) { toast(t('no_verified_models')); return; }
   const content = regenerate ? '' : (text ?? input.value).trim();
   const images = regenerate || editId ? [] : [...state.attachments];
   if (!regenerate && !content && !images.length) return;
@@ -1445,7 +1446,7 @@ async function adminTab(tab) {
         $('#apexPwStatus',pane).textContent = r.ok ? (LANG==='ar'?'تم التغيير. سجل الدخول مجددًا.':'Changed. Please sign in again.') : (LANG==='ar'?'تحقق من كلمة المرور الحالية والجديدة (10 أحرف على الأقل).':'Check current password and minimum 10-character new password.');
         if (r.ok) { setToken(''); state.user=null; }
       };
-      const refresh=document.createElement('button');refresh.className='btn btn-secondary';refresh.textContent=LANG==='ar'?'اكتشاف نماذج Gemini':'Discover Gemini models';pane.querySelector('.ad-set').appendChild(refresh);
+      const refresh=document.createElement('button');refresh.className='btn btn-secondary';refresh.textContent=LANG==='ar'?'اختبار النماذج المتصلة':'Verify connected models';pane.querySelector('.ad-set').appendChild(refresh);
       refresh.onclick=async()=>{refresh.disabled=true;try{const r=await api('/api/admin/models/refresh',{method:'POST',body:'{}'});const d=await r.json();if(!r.ok)throw new Error(d.detail?.message||d.detail||'Discovery failed');toast((LANG==='ar'?'نماذج مكتشفة: ':'Discovered: ')+d.discovered.length);await onAuthed();await adminTab('settings');}catch(e){toast(String(e.message));}finally{refresh.disabled=false;}};
       return;
     }
