@@ -110,7 +110,7 @@ const STR = {
     no_results: 'لا توجد نتائج', settings: 'الإعدادات', personalize: 'التخصيص', help: 'المساعدة', logout: 'تسجيل الخروج', upgrade_plan: 'ترقية الخطة',
     general: 'عام', data: 'عناصر التحكم في البيانات', theme: 'المظهر', language: 'اللغة', sys: 'النظام', dark: 'داكن', light: 'فاتح',
     delete_all: 'حذف جميع الدردشات', delete_all_btn: 'حذف الكل', del_all_title: 'مسح سجل الدردشة؟', del_all_body: 'سيتم حذف جميع الدردشات نهائياً.',
-    model_head: 'النماذج', m1: 'GPT-5.1', m1s: 'ذكي ومتعدد الاستخدامات', m2: 'GPT-5 mini', m2s: 'سريع للمهام اليومية', m3: 'Claude Sonnet', m3s: 'نموذج بديل للكتابة والبرمجة', m4: 'Grok', m4s: 'مباشر وسريع البديهة', m5: 'DeepSeek', m5s: 'قوي في البرمجة والتحليل', m6: 'Qwen', m6s: 'متعدد اللغات من Alibaba', m7: 'Gemini Flash', m7s: 'سريع من جوجل',
+    model_head: 'النماذج المتصلة فعليًا', no_verified_models: 'لا توجد نماذج مؤكدة', connect_provider: 'اربط مزودًا ثم اختبر النماذج', m1: 'GPT-5.1', m1s: 'ذكي ومتعدد الاستخدامات', m2: 'GPT-5 mini', m2s: 'سريع للمهام اليومية', m3: 'Claude Sonnet', m3s: 'نموذج بديل للكتابة والبرمجة', m4: 'Grok', m4s: 'مباشر وسريع البديهة', m5: 'DeepSeek', m5s: 'قوي في البرمجة والتحليل', m6: 'Qwen', m6s: 'متعدد اللغات من Alibaba', m7: 'Gemini Flash', m7s: 'سريع من جوجل',
     err: 'حدث خطأ أثناء إنشاء الرد.', retry: 'إعادة المحاولة', creating_image: 'جارٍ إنشاء الصورة…', thinking_lbl: 'يفكر',
     shared: 'تم نسخ المحادثة إلى الحافظة', soon: 'هذه الميزة غير متاحة في هذه النسخة', mic_na: 'الإملاء الصوتي غير مدعوم في هذا المتصفح',
     lib_title: 'المكتبة', lib_empty: 'الصور التي تنشئها ستظهر هنا', stopped: 'تم الإيقاف', upgrade_t: 'ترقية خطتك', upgrade_b: 'تختلف الميزات والحصص حسب الخطة وتُفرض من الخادم.',
@@ -162,7 +162,7 @@ const STR = {
     no_results: 'No results', settings: 'Settings', personalize: 'Personalization', help: 'Help', logout: 'Log out', upgrade_plan: 'Upgrade plan',
     general: 'General', data: 'Data controls', theme: 'Theme', language: 'Language', sys: 'System', dark: 'Dark', light: 'Light',
     delete_all: 'Delete all chats', delete_all_btn: 'Delete all', del_all_title: 'Clear your chat history?', del_all_body: 'All chats will be permanently deleted.',
-    model_head: 'Models', m1: 'GPT-5.1', m1s: 'Smart and versatile', m2: 'GPT-5 mini', m2s: 'Fast for everyday tasks', m3: 'Claude Sonnet', m3s: 'Alternative for writing & code', m4: 'Grok', m4s: 'Direct and quick', m5: 'DeepSeek', m5s: 'Strong at code & analysis', m6: 'Qwen', m6s: 'Multilingual by Alibaba', m7: 'Gemini Flash', m7s: 'Fast, by Google',
+    model_head: 'Verified connected models', no_verified_models: 'No verified models', connect_provider: 'Connect a provider and test its models', m1: 'GPT-5.1', m1s: 'Smart and versatile', m2: 'GPT-5 mini', m2s: 'Fast for everyday tasks', m3: 'Claude Sonnet', m3s: 'Alternative for writing & code', m4: 'Grok', m4s: 'Direct and quick', m5: 'DeepSeek', m5s: 'Strong at code & analysis', m6: 'Qwen', m6s: 'Multilingual by Alibaba', m7: 'Gemini Flash', m7s: 'Fast, by Google',
     err: 'Something went wrong while generating the response.', retry: 'Retry', creating_image: 'Creating image…', thinking_lbl: 'Thinking',
     shared: 'Conversation copied to clipboard', soon: 'This feature isn’t available in this clone', mic_na: 'Dictation isn’t supported in this browser',
     lib_title: 'Library', lib_empty: 'Images you create will show up here', stopped: 'Stopped', upgrade_t: 'Upgrade your plan', upgrade_b: 'Features and usage limits differ by plan and are enforced by the server.',
@@ -201,7 +201,7 @@ let LANG = store.get('lang', 'ar');
 const t = (k, ...a) => { const v = STR[LANG][k]; return typeof v === 'function' ? v(...a) : (v ?? k); };
 
 /* ---------------- State ---------------- */
-const MODELS = [{id:'fast',ver:'',name:'APEX',sub:'Model not configured',brand:'APEX',allowed:true}];
+const MODELS = [{id:'fast',ver:'',name:t('no_verified_models'),sub:t('connect_provider'),brand:t('no_verified_models'),allowed:false,empty:true}];
 let capabilities = null, activeRunId = null;
 const state = {
   chats: [], chatId: null, messages: [], model: store.get('model', 'fast'), tools: [], mode: store.get('mode', 'chat'),
@@ -961,7 +961,7 @@ function voiceMode() {
 }
 
 /* ---------------- Model ---------------- */
-function setModel(id) { if (MODELS.find(m => m.id === id)?.allowed === false) return openPlans(); state.model = id; store.set('model', id); updateModelBtn(); }
+function setModel(id) { const m = MODELS.find(x => x.id === id); if (!m) return; if (m.empty) return toast(t('no_verified_models')); if (m.allowed === false) return openPlans(); state.model = id; store.set('model', id); updateModelBtn(); }
 function updateModelBtn() { const m = MODELS.find(x => x.id === state.model) || MODELS[0]; $('#modelVer').textContent = m.ver; $('#modelVer').classList.toggle('hidden', !m.ver); $('.model-name').textContent = m.brand; }
 function modelMenu(anchor) {
   popover(anchor, [
@@ -1356,7 +1356,8 @@ async function onAuthed() {
     const r = await api('/api/capabilities');
     if (r.ok) {
       capabilities = await r.json();
-      if (capabilities.models.length) MODELS.splice(0, MODELS.length, ...capabilities.models.map(m => ({...m,brand:m.label,ver:'',name:m.label,sub:m.allowed ? (LANG==='ar'?'متاح في خطتك':'Available in your plan') : (LANG==='ar'?'يتطلب ترقية':'Upgrade required')})));
+      if (capabilities.models.length) MODELS.splice(0, MODELS.length, ...capabilities.models.map(m => ({...m,brand:m.label,ver:'',name:m.label,sub:m.allowed ? (LANG==='ar'?'تم اختبار الاتصال بنجاح':'Connection test passed') : (LANG==='ar'?'يتطلب ترقية':'Upgrade required')})));
+      else MODELS.splice(0, MODELS.length, {id:'fast',ver:'',name:t('no_verified_models'),sub:t('connect_provider'),brand:t('no_verified_models'),allowed:false,empty:true});
       if (!MODELS.find(m => m.id === state.model && m.allowed)) state.model = MODELS.find(m => m.allowed)?.id || 'fast';
     }
   } catch {}
