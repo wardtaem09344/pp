@@ -24,10 +24,14 @@ def transport(monkeypatch):
 def test_gemini_discovery_and_tool_signature_roundtrip(monkeypatch, tmp_path, transport):
     monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
     db=Database(str(tmp_path/"catalog.db"))
+    # A previous verified entry must remain intact while network probes are running.
+    db.execute("INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)",
+               ("old:verified", "gemini", "old-model", "Old verified model", "fast", "verified", 1.0))
     provider=Provider(db)
     install,calls=transport
     def handler(request):
         if request.method=="GET":
+            assert db.one("SELECT id FROM provider_models WHERE id='old:verified'") is not None
             return httpx.Response(200,json={"models":[
                 {"name":"models/example-flash","displayName":"Example Flash","supportedGenerationMethods":["generateContent"]},
                 {"name":"models/example-embedding","supportedGenerationMethods":["embedContent"]},
@@ -43,6 +47,8 @@ def test_gemini_discovery_and_tool_signature_roundtrip(monkeypatch, tmp_path, tr
     async def scenario():
         result=await provider.discover()
         assert len([x for x in result["discovered"] if x.startswith("gemini:")])==2
+        assert db.one("SELECT id FROM provider_models WHERE id='old:verified'") is None
+        assert db.one("SELECT id FROM provider_models WHERE id='gemini:example-flash'") is not None
         model="gemini:example-flash"
         message,spent=await provider.complete([{"role":"system","content":"Rules"},{"role":"user","content":"6*7"}],[],model,100)
         assert message["tool_calls"][0]["function"]["name"]=="calculate"
