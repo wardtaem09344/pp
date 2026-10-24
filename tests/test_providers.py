@@ -33,6 +33,9 @@ def test_gemini_discovery_and_tool_signature_roundtrip(monkeypatch, tmp_path, tr
                 {"name":"models/example-embedding","supportedGenerationMethods":["embedContent"]},
                 {"name":"models/example-image","supportedGenerationMethods":["generateContent"]},
                 {"name":"models/example-pro","supportedGenerationMethods":["generateContent"]}]})
+        body=json.loads(request.content)
+        if not body.get("tools"):
+            return httpx.Response(200,json={"candidates":[{"content":{"parts":[{"text":"APEX_OK"}]}}]})
         return httpx.Response(200,json={"candidates":[{"content":{"parts":[
             {"functionCall":{"name":"calculate","args":{"expression":"6*7"}},"thoughtSignature":"fixture-signature"}]}}],
             "usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}})
@@ -55,7 +58,9 @@ def test_gemini_discovery_and_tool_signature_roundtrip(monkeypatch, tmp_path, tr
 
 def test_gemini_auth_not_retried(monkeypatch, transport):
     monkeypatch.setenv("GEMINI_API_KEY","test-placeholder-not-real")
-    p=Provider()
+    db=Database(":memory:")
+    db.execute("INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)", ("fast","gemini","example-flash","Example Flash","fast","verified",0.0))
+    p=Provider(db)
     install,calls=transport
     install(lambda request:httpx.Response(403,json={"error":"refused"}))
     async def scenario():
@@ -68,7 +73,9 @@ def test_gemini_auth_not_retried(monkeypatch, transport):
 
 def test_aiseek_sse_and_strict_tool_protocol(monkeypatch, transport):
     monkeypatch.setenv("AISEEK_ACCESS_TOKEN","test-placeholder-not-real")
-    p=Provider()
+    db=Database(":memory:")
+    db.execute("INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)", ("fast","aiseek","deepseek/deepseek-chat","DeepSeek","fast","verified",0.0))
+    p=Provider(db)
     install,calls=transport
     text=json.dumps({"type":"tool_calls","calls":[{"name":"calculate","arguments":{"expression":"6*7"}}]})
     install(lambda request:httpx.Response(200,headers={"content-type":"text/event-stream"},
@@ -85,7 +92,9 @@ def test_aiseek_sse_and_strict_tool_protocol(monkeypatch, transport):
 
 def test_aiseek_never_executes_unstructured_prose(monkeypatch, transport):
     monkeypatch.setenv("AISEEK_ACCESS_TOKEN","test-placeholder-not-real")
-    p=Provider()
+    db=Database(":memory:")
+    db.execute("INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)", ("fast","aiseek","deepseek/deepseek-chat","DeepSeek","fast","verified",0.0))
+    p=Provider(db)
     install,calls=transport
     install(lambda request:httpx.Response(200,text='data: {"content":"I ran shell and deployed everything"}\n\n'))
     async def scenario():
@@ -95,18 +104,18 @@ def test_aiseek_never_executes_unstructured_prose(monkeypatch, transport):
     asyncio.run(scenario())
 
 
-def test_aiseek_candidates_are_not_discovery(monkeypatch):
+def test_unverified_models_are_not_exposed(monkeypatch):
     monkeypatch.setenv("AISEEK_ACCESS_TOKEN","test-placeholder-not-real")
-    p=Provider()
-    candidates=[m for m in p.models() if m["id"].startswith("aiseek:")]
-    assert len(candidates)==6 and all(m["status"]=="provided-candidate" for m in candidates)
-    assert not any("claude" in m["id"] for m in candidates)
+    p=Provider(Database(":memory:"))
+    assert p.models() == []
 
 
 def test_openai_transient_retry_is_bounded(monkeypatch,transport):
     monkeypatch.setenv("OPENAI_API_KEY","test-placeholder-not-real")
     monkeypatch.setenv("FAST_MODEL","fixture-model")
-    p=Provider()
+    db=Database(":memory:")
+    db.execute("INSERT INTO provider_models VALUES (?,?,?,?,?,?,?)", ("fast","openai","fixture-model","fixture-model","fast","verified",0.0))
+    p=Provider(db)
     install,calls=transport
     install(lambda request:httpx.Response(503,json={"error":"temporary"}))
     async def no_delay(*args):pass
@@ -119,37 +128,9 @@ def test_openai_transient_retry_is_bounded(monkeypatch,transport):
     assert len(calls)==3
 
 
-def test_model_resolution_gemini_only(monkeypatch):
-    monkeypatch.delenv("AISEEK_ACCESS_TOKEN", raising=False)
-    monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    provider = Provider()
-    ids = [m["id"] for m in provider.models()]
-    assert "fast" in ids
-    fast = next(m for m in provider.models() if m["id"] == "fast")
-    assert fast["provider"] == "gemini" and fast["provider_model"] == "gemini-3.8-flash"
-
-
-def test_model_resolution_aiseek_only(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    monkeypatch.setenv("AISEEK_ACCESS_TOKEN", "test-placeholder-not-real")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    provider = Provider()
-    ids = [m["id"] for m in provider.models()]
-    assert "fast" in ids
-    fast = next(m for m in provider.models() if m["id"] == "fast")
-    assert fast["provider"] == "aiseek" and fast["provider_model"] == "deepseek/deepseek-chat"
-
-
-def test_model_resolution_both(monkeypatch):
+def test_model_resolution_requires_verified_catalog(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-placeholder-not-real")
     monkeypatch.setenv("AISEEK_ACCESS_TOKEN", "test-placeholder-not-real")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    provider = Provider()
-    ids = [m["id"] for m in provider.models()]
-    assert "fast" in ids
-    fast = next(m for m in provider.models() if m["id"] == "fast")
-    assert fast["provider"] == "aiseek"
-    assert "gemini:gemini-3.8-flash" in ids
+    provider = Provider(Database(":memory:"))
+    assert provider.models() == []
     assert provider.tier("fast") == "fast"
-    assert provider.tier("gemini:gemini-3.8-flash") == "fast"
