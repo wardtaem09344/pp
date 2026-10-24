@@ -894,12 +894,14 @@ function startAgentPreset(kind) {
 }
 function plusMenu(anchor) {
   popover(anchor, [
+    { head: LANG === 'ar' ? 'إضافة إلى المحادثة' : 'Add to chat' },
     { icon: 'clip', label: t('add_photos'), run: () => fileInput.click() },
     '-',
-    { icon: 'image', label: t('create_image'), checked: hasTool('image'), run: () => toggleTool('image') },
-    { icon: 'bulb', label: t('thinking'), checked: hasTool('think'), run: () => toggleTool('think') },
-    { icon: 'telescope', label: t('deep_research'), checked: hasTool('research'), run: () => toggleTool('research') },
     { icon: 'globe', label: t('web_search'), checked: hasTool('search'), run: () => toggleTool('search') },
+    { icon: 'telescope', label: t('deep_research'), checked: hasTool('research'), run: () => toggleTool('research') },
+    { icon: 'bulb', label: t('thinking'), checked: hasTool('think'), run: () => toggleTool('think') },
+    '-',
+    { icon: 'image', label: t('create_image'), checked: hasTool('image'), run: () => toggleTool('image') },
     '-',
     { icon: 'more', label: t('more'), right: icon('chevSide'), run: () => moreToolsMenu(anchor) },
   ], { side: isMobile() ? 'top' : 'bottom', width: 260 });
@@ -985,7 +987,7 @@ function updateModelBtn() {
 function modelMenu(anchor) {
   const available = MODELS.filter(m => !m.empty);
   const items = [
-    { head: LANG === 'ar' ? 'النماذج المتصلة' : 'Connected models' },
+    { head: LANG === 'ar' ? 'اختيار النموذج' : 'Choose a model' },
     ...available.map(m => ({
       label: m.brand || m.label || m.name,
       sub: (m.provider ? String(m.provider).toUpperCase() + ' · ' : '') + (m.sub || ''),
@@ -1386,8 +1388,11 @@ function setModelCatalogue(rows) {
     brand: m.label || m.name,
     ver: '',
     name: m.label || m.name,
-    sub: m.allowed ? (LANG === 'ar' ? 'تم اختبار الاتصال بنجاح' : 'Connection test passed')
-      : (LANG === 'ar' ? 'يتطلب ترقية' : 'Upgrade required'),
+    sub: ({
+      fast: LANG === 'ar' ? 'سريع' : 'Fast',
+      standard: LANG === 'ar' ? 'متوازن' : 'Balanced',
+      advanced: LANG === 'ar' ? 'متقدم' : 'Advanced',
+    })[m.tier] || (LANG === 'ar' ? 'نموذج متصل' : 'Connected model'),
   }));
   if (!cleaned.length) return false;
   MODELS.splice(0, MODELS.length, ...cleaned);
