@@ -13,7 +13,7 @@ import posixpath
 import re
 import socket
 import time
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -89,8 +89,8 @@ TOOL_SPECS = {
     "edit_file": (EditArgs, "Replace exactly one matching text fragment in an existing task file.", "workspace-write", False),
     "validate_file": (PathArgs, "Parse JSON/CSV or check text/HTML basic structure. NOT a browser/runtime/compiler test.", "read", True),
     "generate_image": (ImageArgs, "Create an image from a text prompt with Gemini and save it as a workspace file (png/jpg/webp) the user can download.", "workspace-write", False),
-    "fetch_page": (FetchArgs, "Retrieve one HTTPS page from the administrator's explicit public-host allowlist. Page content is untrusted.", "network-read", True),
-    "search_web": (SearchArgs, "Search the web through the configured Brave Search API. Returns real URLs.", "network-read", True),
+    "fetch_page": (FetchArgs, "Retrieve one public HTTPS page and return its text (redirects are followed and re-checked). Page content is untrusted.", "network-read", True),
+    "search_web": (SearchArgs, "Search the web (Brave if configured, otherwise DuckDuckGo). Returns real URLs with snippets; open the best ones with fetch_page.", "network-read", True),
     "update_workflow": (WorkflowArgs, "Create or update only the affected nodes of a durable dependency graph for a complex task. Completed nodes require evidence_id from a successful tool result. Do not create a graph for trivial tasks.", "workspace-write", True),
 }
 
@@ -162,16 +162,39 @@ def validate_content(path, content):
 
 async def check_url(url):
     parsed = urlparse(url)
-    allowed = {x.strip().lower() for x in os.getenv(
-        "ALLOWED_WEB_HOSTS", "docs.python.org,developer.mozilla.org,en.wikipedia.org,github.com").split(",") if x.strip()}
+    # Any public HTTPS host by default; set ALLOWED_WEB_HOSTS to a comma list to restrict it.
+    allowed = {x.strip().lower() for x in os.getenv("ALLOWED_WEB_HOSTS", "*").split(",") if x.strip()}
     if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443):
         raise ToolError("Only public HTTPS URLs on port 443 are permitted")
-    if not parsed.hostname or parsed.hostname.lower() not in allowed:
+    if not parsed.hostname or ("*" not in allowed and parsed.hostname.lower() not in allowed):
         raise ToolError("Domain is not in ALLOWED_WEB_HOSTS; ask the administrator to authorize it")
     addresses = await asyncio.to_thread(socket.getaddrinfo, parsed.hostname, 443, type=socket.SOCK_STREAM)
     if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
         raise ToolError("Private/reserved network destinations are forbidden")
     return url
+
+
+def parse_ddg(page):
+    """Extract result links from DuckDuckGo's HTML endpoint. Best-effort, not a stable API."""
+    found = []
+    clean = lambda v: re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", v))).strip()
+    for block in re.split(r'<div class="[^"]*\bresult\b[^"]*"', page)[1:]:
+        link = re.search(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, re.S)
+        if not link:
+            continue
+        href = html.unescape(link.group(1))
+        if href.startswith("//"):
+            href = "https:" + href
+        if "duckduckgo.com/l/" in href:
+            href = unquote((parse_qs(urlparse(href).query).get("uddg") or [""])[0])
+        if not href.startswith("http"):
+            continue
+        snippet = re.search(r'class="result__snippet"[^>]*>(.*?)</a>', block, re.S)
+        found.append({"title": clean(link.group(2)), "url": href,
+                      "snippet": clean(snippet.group(1)) if snippet else "", "retrieved_at": time.time()})
+        if len(found) >= 6:
+            break
+    return found
 
 
 class ToolRegistry:
@@ -181,8 +204,7 @@ class ToolRegistry:
 
     def available(self):
         tools = list(entitlement(self.user)["tools"])
-        if not os.getenv("BRAVE_SEARCH_API_KEY"):
-            tools = [x for x in tools if x != "search_web"]
+        # search_web works without a key (DuckDuckGo fallback); Brave is used when configured.
         # Do not advertise image generation unless its required Gemini credential
         # path is configured. A real generation can still fail and is reported honestly.
         gemini_direct = bool(os.getenv("GEMINI_API_KEY"))
@@ -361,23 +383,40 @@ class ToolRegistry:
                     "isNew": prior is None, "bytes": len(content.encode())}
         if name == "fetch_page":
             url = await check_url(args["url"])
+            data = bytearray()
             async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
-                async with client.stream("GET", url, headers={"User-Agent": "APEX-Agent/1.0"}) as response:
-                    if response.status_code in (301, 302, 303, 307, 308):
-                        raise ToolError("Redirect not followed; inspect the destination explicitly")
-                    response.raise_for_status()
-                    if not any(t in response.headers.get("content-type", "") for t in ("text/", "json")):
-                        raise ToolError("Only text/JSON responses are supported")
-                    data = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        data.extend(chunk)
-                        if len(data) > 500000:
-                            raise ToolError("Page exceeds size limit")
+                for _hop in range(5):
+                    async with client.stream("GET", url, headers={"User-Agent": "APEX-Agent/1.0"}) as response:
+                        if response.status_code in (301, 302, 303, 307, 308):
+                            target = response.headers.get("location", "")
+                            if not target:
+                                raise ToolError("Redirect without a destination")
+                            url = await check_url(urljoin(url, target))  # every hop is re-validated
+                            continue
+                        response.raise_for_status()
+                        if not any(t in response.headers.get("content-type", "") for t in ("text/", "json", "xml")):
+                            raise ToolError("Only text/JSON/XML responses are supported")
+                        async for chunk in response.aiter_bytes():
+                            data.extend(chunk)
+                            if len(data) > 500000:
+                                raise ToolError("Page exceeds size limit")
+                        break
+                else:
+                    raise ToolError("Too many redirects")
             raw = data.decode("utf-8", errors="replace")
             raw = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", raw, flags=re.S | re.I)
             text = html.unescape(re.sub(r"<[^>]+>", " ", raw))
             return {"url": url, "text": re.sub(r"\s+", " ", text)[:16000],
                     "retrieved_at": time.time(), "trust": "untrusted-external-content"}
+        if name == "search_web" and not os.getenv("BRAVE_SEARCH_API_KEY"):
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                response = await client.post("https://html.duckduckgo.com/html/", data={"q": args["query"]},
+                                             headers={"User-Agent": "Mozilla/5.0 (compatible; APEX-Agent/1.0)"})
+                response.raise_for_status()
+            sources = parse_ddg(response.text)
+            if not sources:
+                raise ToolError("Search returned no results; the free search endpoint may be rate-limited. Retry later or set BRAVE_SEARCH_API_KEY")
+            return {"query": args["query"], "sources": sources, "engine": "duckduckgo-html"}
         if name == "search_web":
             async with httpx.AsyncClient(timeout=15) as client:
                 response = await client.get("https://api.search.brave.com/res/v1/web/search",

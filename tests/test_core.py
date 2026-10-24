@@ -409,3 +409,17 @@ def test_image_tool_is_not_advertised_without_gemini_credentials(setup, monkeypa
     assert response.status_code == 200
     assert response.json()["features"]["image_generation"] is False
     assert "generate_image" not in [tool["name"] for tool in response.json()["tools"]]
+
+
+def test_search_results_parser_and_open_fetch_guard():
+    # Fixture HTML, not a live search; proves parsing and the SSRF guard only.
+    from server.tools import parse_ddg, check_url
+    page=('<div class="result results_links"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fa">Example</a>'
+          '<a class="result__snippet" href="x">A <b>snippet</b></a></div>')
+    results=parse_ddg(page)
+    assert results[0]["url"]=="https://example.org/a" and results[0]["snippet"]=="A snippet"
+    async def blocked(url):
+        with pytest.raises(ToolError):
+            await check_url(url)
+    for url in ("http://example.com","https://127.0.0.1/","https://localhost/"):
+        asyncio.run(blocked(url))
