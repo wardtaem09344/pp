@@ -985,7 +985,9 @@ function updateModelBtn() {
   if (name) name.textContent = m?.brand || (LANG === 'ar' ? 'النماذج' : 'Models');
 }
 function modelMenu(anchor) {
-  const available = MODELS.filter(m => !m.empty);
+  // Only show models the current account is allowed to use; the server remains
+  // authoritative, but the picker should not offer options guaranteed to 403.
+  const available = MODELS.filter(m => !m.empty && m.allowed !== false);
   const items = [
     { head: LANG === 'ar' ? 'اختيار النموذج' : 'Choose a model' },
     ...available.map(m => ({
@@ -1006,7 +1008,7 @@ function stopStream() {
 }
 async function send({ text, regenerate = false, editId = null } = {}) {
   if (state.streaming) return;
-  if (!MODELS.some(m => m.id === state.model && !m.empty)) { toast(t('no_verified_models')); return; }
+  if (!MODELS.some(m => m.id === state.model && !m.empty && m.allowed !== false)) { toast(t('no_verified_models')); return; }
   const content = regenerate ? '' : (text ?? input.value).trim();
   const images = regenerate || editId ? [] : [...state.attachments];
   if (!regenerate && !content && !images.length) return;
