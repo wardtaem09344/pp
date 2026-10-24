@@ -183,6 +183,13 @@ class ToolRegistry:
         tools = list(entitlement(self.user)["tools"])
         if not os.getenv("BRAVE_SEARCH_API_KEY"):
             tools = [x for x in tools if x != "search_web"]
+        # Do not advertise image generation unless its required Gemini credential
+        # path is configured. A real generation can still fail and is reported honestly.
+        gemini_direct = bool(os.getenv("GEMINI_API_KEY"))
+        gemini_proxy = bool(os.getenv("CUSTOM_CRED_GENERATIVELANGUAGE_GOOGLEAPIS_COM_URL")
+                            and os.getenv("CUSTOM_CRED_GENERATIVELANGUAGE_GOOGLEAPIS_COM_PROXY_AUTH_KEY"))
+        if not (gemini_direct or gemini_proxy):
+            tools = [x for x in tools if x != "generate_image"]
         return tools
 
     def schemas(self):
