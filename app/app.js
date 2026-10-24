@@ -1379,16 +1379,57 @@ $('#authForm').addEventListener('submit', async (e) => {
   } finally { btn.disabled = false; btn.textContent = authMode === 'signup' ? t('signup_btn') : t('login_btn'); }
 });
 function authFail() { setToken(''); state.user = null; state.messages=[]; state.chats=[]; state.chatId=null; capabilities=null; activeRunId=null; renderMessages(); renderChatList(); showAuth(); }
-async function onAuthed() {
+function setModelCatalogue(rows) {
+  if (!Array.isArray(rows) || !rows.length) return false;
+  const cleaned = rows.filter(m => m && m.id && (m.label || m.name)).map(m => ({
+    ...m,
+    brand: m.label || m.name,
+    ver: '',
+    name: m.label || m.name,
+    sub: m.allowed ? (LANG === 'ar' ? 'تم اختبار الاتصال بنجاح' : 'Connection test passed')
+      : (LANG === 'ar' ? 'يتطلب ترقية' : 'Upgrade required'),
+  }));
+  if (!cleaned.length) return false;
+  MODELS.splice(0, MODELS.length, ...cleaned);
+  if (!MODELS.find(m => m.id === state.model && m.allowed)) {
+    state.model = MODELS.find(m => m.allowed)?.id || MODELS[0].id || 'fast';
+  }
+  updateModelBtn();
+  return true;
+}
+async function loadModelCatalogue() {
+  let loaded = false;
   try {
     const r = await api('/api/capabilities');
     if (r.ok) {
-      capabilities = await r.json();
-      if (capabilities.models.length) MODELS.splice(0, MODELS.length, ...capabilities.models.map(m => ({...m,brand:m.label,ver:'',name:m.label,sub:m.allowed ? (LANG==='ar'?'تم اختبار الاتصال بنجاح':'Connection test passed') : (LANG==='ar'?'يتطلب ترقية':'Upgrade required')})));
-      else MODELS.splice(0, MODELS.length, {id:'fast',ver:'',name:t('no_verified_models'),sub:t('connect_provider'),brand:t('no_verified_models'),allowed:false,empty:true});
-      if (!MODELS.find(m => m.id === state.model && m.allowed)) state.model = MODELS.find(m => m.allowed)?.id || 'fast';
+      const data = await r.json();
+      if (data && typeof data === 'object') capabilities = data;
+      loaded = setModelCatalogue(data?.models);
     }
   } catch {}
+  // The dedicated endpoint avoids losing the picker if another capability (such
+  // as tool inventory) fails while the verified model catalogue is available.
+  if (!loaded) {
+    try {
+      const r = await api('/api/models');
+      if (r.ok) {
+        const data = await r.json();
+        loaded = setModelCatalogue(data?.models);
+      }
+    } catch {}
+  }
+  if (!loaded) {
+    MODELS.splice(0, MODELS.length, {
+      id: 'fast', ver: '', name: t('no_verified_models'),
+      sub: t('connect_provider'), brand: t('no_verified_models'),
+      allowed: false, empty: true,
+    });
+    state.model = 'fast';
+    updateModelBtn();
+  }
+}
+async function onAuthed() {
+  await loadModelCatalogue();
   renderProfileBits();
   try { const r = await api('/api/prefs'); if (r.ok) { const p = await r.json(); Object.assign(PREFS, p || {}); } } catch {}
   LANG = PREFS.lang || LANG; state.theme = PREFS.theme || state.theme;
