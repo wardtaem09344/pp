@@ -79,9 +79,7 @@
 .topbar .sidebar-top-btn:hover{background:var(--hover)}
 .topbar .top-end{left:auto;right:10px}
 .topbar .top-end .icon-btn{width:36px;height:36px}
-.composer-model-btn{display:none!important}
-.composer:focus-within .composer-model-btn,
-.composer:has(#input:not(:placeholder-shown)) .composer-model-btn{display:inline-flex!important}
+.composer-model-btn{display:inline-flex}
 @media(max-width:767px){
  .topbar .sidebar-top-btn{left:5px;width:32px;height:32px}
  .topbar .top-end{left:auto;right:5px}

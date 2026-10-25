@@ -96,7 +96,7 @@ const STR = {
     chats: 'الدردشات', user_name: 'مستخدم', plan_free: 'مجاني', upgrade: 'ترقية', share: 'مشاركة',
     open_sidebar: 'فتح الشريط الجانبي', close_sidebar: 'إغلاق الشريط الجانبي', temp_chat: 'تشغيل الدردشة المؤقتة',
     add_files: 'إضافة ملفات والمزيد', dictate: 'إملاء', placeholder: 'اسأل عن أي شيء', placeholder_img: 'صِف صورة أو عدّل صورة',
-    disclaimer: 'قد يرتكب ChatGPT أخطاءً. تحقق من المعلومات المهمة.',
+    disclaimer: 'قد يرتكب APEX أخطاءً. تحقق من المعلومات المهمة.',
     welcome: ['بماذا يمكنني المساعدة؟', 'ما الذي يدور في ذهنك اليوم؟', 'من أين نبدأ؟', 'جاهز عندما تكون جاهزاً.', 'ما الجدول اليوم؟'],
     temp_title: 'دردشة مؤقتة', temp_note: 'تخفي الواجهة هذه الدردشة أثناء الجلسة وتحاول حذفها عند الانتقال. قد تبقى بيانات على الخادم إذا أُغلقت الصفحة؛ وتخضع معالجة الرسائل لسياسة مزوّد النموذج.',
     add_photos: 'إضافة صور وملفات', create_image: 'إنشاء صورة', thinking: 'فكّر لفترة أطول', deep_research: 'بحث متعمق', web_search: 'بحث في الويب', more: 'المزيد',
@@ -148,7 +148,7 @@ const STR = {
     chats: 'Chats', user_name: 'User', plan_free: 'Free', upgrade: 'Upgrade', share: 'Share',
     open_sidebar: 'Open sidebar', close_sidebar: 'Close sidebar', temp_chat: 'Turn on temporary chat',
     add_files: 'Add files and more', dictate: 'Dictate', placeholder: 'Ask anything', placeholder_img: 'Describe or edit an image',
-    disclaimer: 'ChatGPT can make mistakes. Check important info.',
+    disclaimer: 'APEX can make mistakes. Check important info.',
     welcome: ['What can I help with?', 'What’s on your mind today?', 'Where should we begin?', 'Ready when you are.', 'What’s on the agenda today?'],
     temp_title: 'Temporary Chat', temp_note: 'The interface hides this chat during the session and attempts deletion when navigating away. Data can remain on the server if the page closes; model-provider processing follows its own policy.',
     add_photos: 'Add photos & files', create_image: 'Create image', thinking: 'Think longer', deep_research: 'Deep research', web_search: 'Web search', more: 'More',
@@ -425,7 +425,7 @@ async function shareChat(id) {
   let msgs = state.messages;
   if (id !== state.chatId) { try { const r = await api(`/api/chats/${id}`); msgs = (await r.json()).messages; } catch { return; } }
   const c = state.chats.find(x => x.id === id);
-  const txt = `# ${c?.title || ''}\n\n` + msgs.map(m => `${m.role === 'user' ? '**You:**' : '**ChatGPT:**'}\n${m.content || ''}`).join('\n\n');
+  const txt = `# ${c?.title || ''}\n\n` + msgs.map(m => `${m.role === 'user' ? '**You:**' : '**APEX:**'}\n${m.content || ''}`).join('\n\n');
   if (await copyText(txt)) toast(t('shared'));
 }
 
@@ -441,7 +441,7 @@ function newChat({ keepTemp = false } = {}) {
   if (!keepTemp && state.temp) { state.temp = false; $('#tempBtn').classList.remove('on'); }
   state.chatId = null; state.messages = []; state.attachments = []; renderAttachments();
   welcomeIdx++; setWelcome(); renderMessages(); setRoute(null); renderChatList(); updateChrome();
-  document.title = 'ChatGPT'; appEl.classList.remove('mobile-open');
+  document.title = 'APEX'; appEl.classList.remove('mobile-open');
   input.value = ''; autoGrow(); if (!isMobile()) input.focus();
 }
 async function openChat(id) {
@@ -450,7 +450,7 @@ async function openChat(id) {
   appEl.classList.remove('mobile-open');
   try {
     const r = await api(`/api/chats/${id}`); if (!r.ok) throw new Error('nf');
-    const d = await r.json(); state.chatId = id; state.messages = d.messages; document.title = d.chat.title || 'ChatGPT';
+    const d = await r.json(); state.chatId = id; state.messages = d.messages; document.title = d.chat.title || 'APEX';
     setRoute(id); renderChatList(); renderMessages(); updateChrome(); scrollBottom(true);
   } catch { newChat(); }
 }
@@ -874,7 +874,7 @@ function toolIsAvailable(name) {
 function toggleTool(k) {
   if (k === 'image') { startImageGeneration(); return; }
   if (k === 'search' && !toolIsAvailable('search_web')) {
-    toast(LANG === 'ar' ? 'بحث الويب غير مهيأ: يلزم مفتاح Brave Search على الخادم.' : 'Web search is not configured: a server-side Brave Search key is required.');
+    toast(LANG === 'ar' ? 'بحث الويب غير متاح في خطتك الحالية (يلزم Pro أو Ultra).' : 'Web search is not available on your current plan (Pro or Ultra required).');
     return;
   }
   if (k === 'research' && !toolIsAvailable('search_web') && !toolIsAvailable('fetch_page')) {
@@ -894,7 +894,7 @@ function toggleTool(k) {
 function setTool(k) {
   if (k === 'image') { startImageGeneration(); return; }
   if (k === 'search' && !toolIsAvailable('search_web')) {
-    toast(LANG === 'ar' ? 'بحث الويب غير مهيأ: يلزم مفتاح Brave Search على الخادم.' : 'Web search is not configured: a server-side Brave Search key is required.');
+    toast(LANG === 'ar' ? 'بحث الويب غير متاح في خطتك الحالية (يلزم Pro أو Ultra).' : 'Web search is not available on your current plan (Pro or Ultra required).');
     return;
   }
   if (k === 'research' && !toolIsAvailable('search_web') && !toolIsAvailable('fetch_page')) {
@@ -911,7 +911,7 @@ function renderToolChip() {
   syncQuickTools();
 }
 function syncQuickTools() {
-  $('.top-tool').forEach(b => {
+  $$('.top-tool').forEach(b => {
     const active = hasTool(b.dataset.tool);
     b.classList.toggle('active', active);
     b.setAttribute('aria-pressed', String(active));
@@ -984,7 +984,7 @@ $('#suggestions').addEventListener('click', (e) => { const b = e.target.closest(
 function voiceMode() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const ov = document.createElement('div'); ov.className = 'voice-ov';
-  ov.innerHTML = `<div class="v-top"><span class="v-model">ChatGPT</span></div><button class="v-orb" aria-label="talk"><span></span></button><p class="v-status"></p>
+  ov.innerHTML = `<div class="v-top"><span class="v-model">APEX</span></div><button class="v-orb" aria-label="talk"><span></span></button><p class="v-status"></p>
     <div class="v-ctrls"><button class="v-btn" data-v="mic" aria-label="mic">${icon('mic')}</button><button class="v-btn v-close" data-v="close" aria-label="close">${icon('x')}</button></div>`;
   document.body.appendChild(ov);
   const status = ov.querySelector('.v-status'), orb = ov.querySelector('.v-orb');
