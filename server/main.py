@@ -237,12 +237,26 @@ def create_app(database=None, provider=None):
         return {"plans": PLANS, "current": user["plan"], "usage": usage(db, user),
                 "reset": "00:00 UTC", "billing": "Owner-managed plans; no payment processor connected."}
 
+    def picker_models(plan):
+        """Models for the UI: the 'fast' alias is a duplicate of a real model, so hide it."""
+        rows = provider.models()
+        real = {(m.get("provider"), m.get("provider_model")) for m in rows if m["id"] != "fast"}
+        rows = [m for m in rows if m["id"] != "fast" or (m.get("provider"), m.get("provider_model")) not in real]
+        return [{**m, "allowed": m.get("tier", m["id"]) in plan["models"]} for m in rows]
+
+    async def ensure_models():
+        # Providers used in tests may not implement automatic verification.
+        ensure = getattr(provider, "ensure_catalogue", None)
+        if ensure:
+            await ensure()
+
     @app.get("/api/capabilities")
-    def capabilities(request: Request):
+    async def capabilities(request: Request):
         user = current_user(request)
         plan = entitlement(user)
+        await ensure_models()  # first visit: verify models with real generations
         return {"provider_ready": provider.ready, "plan": user["plan"],
-                "models": [{**m, "allowed": m.get("tier", m["id"]) in plan["models"]} for m in provider.models()],
+                "models": picker_models(plan),
                 "tools": ToolRegistry(db, user, "").inventory(),
                 "features": {"image_generation": "generate_image" in ToolRegistry(db, user, "").available(),
                              "vision": False, "shell": False, "browser": False,
@@ -250,14 +264,13 @@ def create_app(database=None, provider=None):
                 "limits": plan, "storage": "postgresql" if db.pg else "sqlite-development"}
 
     @app.get("/api/models")
-    def verified_models(request: Request):
+    async def verified_models(request: Request):
         # Keep model loading independent from the broader capabilities response.
         # The chat UI can still populate its picker if a tool inventory fails.
         user = current_user(request)
         plan = entitlement(user)
-        models = [{**m, "allowed": m.get("tier", m["id"]) in plan["models"]}
-                  for m in provider.models()]
-        return {"provider_ready": provider.ready, "models": models}
+        await ensure_models()
+        return {"provider_ready": provider.ready, "models": picker_models(plan)}
 
     @app.get("/api/chats")
     def chats(request: Request, q: str = ""):

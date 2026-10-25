@@ -73,10 +73,13 @@ class Database:
         self.url = url or os.getenv("DATABASE_URL", "")
         self.pg = self.url.startswith(("postgres://", "postgresql://"))
         self.lock = threading.RLock()
+        self._depth = 0  # >0 while inside an explicit transaction; no silent reconnect then
+        self._retry_errors = ()
         if self.pg:
             import psycopg
-            from psycopg.rows import dict_row
-            self.conn = psycopg.connect(self.url, autocommit=True, row_factory=dict_row)
+            self._psycopg = psycopg
+            self._retry_errors = (psycopg.OperationalError, psycopg.InterfaceError)
+            self._connect()
         else:
             path = self.url or os.getenv("SQLITE_PATH", ":memory:" if os.getenv("VERCEL") else "data.db")
             self.conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
@@ -86,9 +89,30 @@ class Database:
         for statement in SCHEMA:
             self.execute(statement)
 
+    def _connect(self):
+        from psycopg.rows import dict_row
+        # Keepalives stop managed PostgreSQL from silently dropping an idle serverless connection.
+        self.conn = self._psycopg.connect(
+            self.url, autocommit=True, row_factory=dict_row, connect_timeout=10,
+            keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3)
+
     def execute(self, sql, args=()):
         with self.lock:
-            return self.conn.execute(sql.replace("?", "%s") if self.pg else sql, args)
+            query = sql.replace("?", "%s") if self.pg else sql
+            try:
+                return self.conn.execute(query, args)
+            except self._retry_errors:
+                # The server closed the connection (idle timeout, deploy, failover).
+                # Reconnect and repeat once, but never inside a transaction: half-applied
+                # work must fail loudly instead of being replayed.
+                if self._depth:
+                    raise
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
+                self._connect()
+                return self.conn.execute(query, args)
 
     def one(self, sql, args=()):
         with self.lock:
@@ -103,10 +127,16 @@ class Database:
     def transaction(self, user_id=None):
         with self.lock:
             if self.pg:
-                with self.conn.transaction():
-                    if user_id:
-                        self.execute("SELECT id FROM users WHERE id=? FOR UPDATE", (user_id,))
-                    yield
+                if not self._depth:
+                    self.execute("SELECT 1")  # reconnects first if the connection went stale
+                self._depth += 1
+                try:
+                    with self.conn.transaction():
+                        if user_id:
+                            self.execute("SELECT id FROM users WHERE id=? FOR UPDATE", (user_id,))
+                        yield
+                finally:
+                    self._depth -= 1
             else:
                 self.conn.execute("BEGIN IMMEDIATE")
                 try:

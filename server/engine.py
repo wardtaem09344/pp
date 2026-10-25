@@ -159,6 +159,9 @@ class Engine:
                     message, spent = await self.provider.complete(
                         request_messages, tools, model, plan["output_tokens"], cancelled)
                     steps += 1
+                    if mode == "agent" and message.get("thoughts"):
+                        # Real reasoning summary returned by the model, shown as-is (trimmed).
+                        self.emit(run_id, "think", {"text": message["thoughts"][:800]})
                     for k, v in spent.items():
                         if isinstance(v, (int, float)):
                             usage[k] = usage.get(k, 0) + v

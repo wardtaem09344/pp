@@ -177,3 +177,48 @@ def test_gemini_discovery_prioritizes_new_models_without_assuming_they_work():
     assert ids[:2] == ["gemini-4-argon", "gemini-3.8-flash"]
     assert all(item[0] not in {"gemini-4-argon", "gemini-3.8-flash"} or item in ranked
                for item in candidates)
+
+
+def test_catalogue_is_verified_capped_and_mixed(monkeypatch, transport):
+    # Synthetic provider answers: proves selection logic, not that a live key works.
+    install, _ = transport
+    names = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-dead"]
+    install(lambda request: httpx.Response(200, json={"models": [
+        {"name": "models/" + n, "displayName": n, "supportedGenerationMethods": ["generateContent"]} for n in names]}))
+    monkeypatch.setenv("GEMINI_API_KEY", "placeholder-not-real")
+    monkeypatch.setenv("AISEEK_ACCESS_TOKEN", "placeholder-not-real")
+    monkeypatch.delenv("VERIFIED_MODEL_LIMIT", raising=False)
+    dead = {"gemini-1.5-dead", "qwen/qwen-coder-32b"}
+
+    async def answer(self, messages, tools, match, out, cancel):
+        if match["provider_model"] in dead:
+            raise ProviderError("dead", "no answer")
+        return {"role": "assistant", "content": "APEX_OK"}, {}
+    monkeypatch.setattr(Provider, "_gemini", answer)
+    monkeypatch.setattr(Provider, "_aiseek", answer)
+    provider = Provider(Database(":memory:"))
+    assert provider.models() == []
+    assert asyncio.run(provider.ensure_catalogue()) is True
+    real = [m for m in provider.models() if m["id"] != "fast"]
+    assert len(real) == 5
+    assert {m["provider"] for m in real} == {"gemini", "aiseek"}
+    assert all(m["provider_model"] not in dead for m in real)
+    assert provider.models()[0]["provider"] == "gemini"
+
+
+def test_gemini_returns_thought_summaries_and_retries_without_support(monkeypatch):
+    seen = []
+
+    async def post(self, endpoint, body, headers, cancel):
+        seen.append("thinkingConfig" in body["generationConfig"])
+        if len(seen) == 1:
+            raise ProviderError("provider_invalid_request", "unsupported")
+        return {"candidates": [{"content": {"parts": [
+            {"thought": True, "text": "Plan: write the file."}, {"text": "done"}]}}], "usageMetadata": {}}
+    monkeypatch.setattr(Provider, "_post_json", post)
+    monkeypatch.setenv("GEMINI_API_KEY", "placeholder-not-real")
+    provider = Provider(None)
+    tools = [{"type": "function", "function": {"name": "calculate", "description": "d", "parameters": {"type": "object", "properties": {}}}}]
+    match = {"provider_model": "gemini-3.8-flash"}
+    message, _ = asyncio.run(provider._gemini([{"role": "user", "content": "hi"}], tools, match, 100, lambda: False))
+    assert seen == [True, False] and message["content"] == "done"

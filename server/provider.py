@@ -80,12 +80,40 @@ class Provider:
         if not self.db:
             return []
         rows = self.db.all("SELECT * FROM provider_models WHERE status='verified' ORDER BY label")
+        # Newest known Gemini first (native tool calling, best default for agent runs).
+        rows.sort(key=lambda r: ({"gemini": 0, "aiseek": 1}.get(r["provider"], 2),
+                                 _GEMINI_MODEL_PRIORITY.get(r["model"], 100), r["label"]))
         return [{"id": r["id"], "provider": r["provider"], "provider_model": r["model"],
                  "label": r["label"], "tier": r["tier"], "status": r["status"]}
                 for r in rows]
 
     def tier(self, model):
         return next((m["tier"] for m in self.models() if m["id"] == model), model)
+
+    _auto_lock = None
+    _auto_last = 0.0
+
+    async def ensure_catalogue(self, min_interval=300):
+        """Verify models automatically when none are listed yet (first visit after deploy).
+
+        Each model must answer a real generation before it is shown. Failed attempts are
+        not repeated for min_interval seconds so a bad key cannot make every request slow.
+        """
+        if not self.ready or not self.db or self.models():
+            return bool(self.db and self.models())
+        if Provider._auto_lock is None:
+            Provider._auto_lock = asyncio.Lock()
+        async with Provider._auto_lock:
+            if self.models():
+                return True
+            if time.time() - Provider._auto_last < min_interval:
+                return False
+            Provider._auto_last = time.time()
+            try:
+                await self.discover()
+            except Exception:
+                return False
+        return bool(self.models())
 
     def _gemini_endpoint(self, path):
         base = self.gemini_url or "https://generativelanguage.googleapis.com"
@@ -102,17 +130,16 @@ class Provider:
         catalogue = {}
         probe_messages = [{"role": "user", "content": "Reply with exactly APEX_OK."}]
 
+        by_provider = {}
+
         def save(model_id, provider, provider_model, label, tier):
-            catalogue[model_id] = {
+            by_provider.setdefault(provider, []).append({
                 "id": model_id, "provider": provider, "model": provider_model,
                 "label": label, "tier": tier, "status": "verified", "updated": time.time(),
-            }
-            if model_id not in discovered:
-                discovered.append(model_id)
+            })
 
         def save_fast_alias(provider, provider_model, label):
-            if "fast" not in catalogue:
-                save("fast", provider, provider_model, label + " · Fast default", "fast")
+            return None  # the default "fast" alias is chosen once, after the cap below
 
         # Gemini's model list is only a candidate list; each candidate must generate.
         if self.gemini_key or (self.gemini_url and self.gemini_proxy_key):
@@ -222,6 +249,26 @@ class Provider:
                 if candidate:
                     save(candidate["id"], "openai", candidate["provider_model"],
                          candidate["label"], candidate["id"])
+        # Keep only a small set of models that really answered, mixing providers so one
+        # provider cannot crowd the picker. Order inside a provider is probe order.
+        limit = max(1, int(os.getenv("VERIFIED_MODEL_LIMIT", "5") or 5))
+        queues = [list(by_provider[name]) for name in ("gemini", "aiseek", "openai") if by_provider.get(name)]
+        chosen = []
+        while queues and len(chosen) < limit:
+            for queue in list(queues):
+                if len(chosen) >= limit:
+                    break
+                chosen.append(queue.pop(0))
+                if not queue:
+                    queues.remove(queue)
+        for model in chosen:
+            catalogue[model["id"]] = model
+            discovered.append(model["id"])
+        fast = next((m for m in chosen if m["tier"] == "fast"), None) or (chosen[0] if chosen else None)
+        if fast:
+            alias = {**fast, "id": "fast", "label": fast["label"] + " · Fast default"}
+            catalogue["fast"] = alias
+            discovered.append("fast")
         # Commit atomically only after all provider probes have completed. If no
         # candidate passed, keep prior rows for diagnosis but mark them stale so
         # models() cannot expose them as available. A later successful refresh replaces
@@ -270,6 +317,11 @@ class Provider:
                     contents.append({"role": role, "parts": parts})
         body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents,
                 "generationConfig": {"maxOutputTokens": output_tokens}}
+        # Ask for the model's own thought summaries during agent runs so the user sees
+        # real reasoning. Models that do not support it are retried once without it.
+        want_thoughts = bool(tools)
+        if want_thoughts:
+            body["generationConfig"]["thinkingConfig"] = {"includeThoughts": True}
         if tools:
             def clean_schema(value, definitions=None):
                 definitions = definitions or (value.get("$defs", {}) if isinstance(value,dict) else {})
@@ -287,12 +339,20 @@ class Provider:
         if not re.fullmatch(r"[\w.-]+", model):
             raise ProviderError("invalid_model", "Invalid Gemini model name")
         endpoint, headers = self._gemini_endpoint("/v1beta/models/" + model + ":generateContent")
-        data = await self._post_json(endpoint, body, headers, cancel)
+        try:
+            data = await self._post_json(endpoint, body, headers, cancel)
+        except ProviderError as error:
+            if not (want_thoughts and error.code == "provider_invalid_request"):
+                raise
+            body["generationConfig"].pop("thinkingConfig", None)
+            data = await self._post_json(endpoint, body, headers, cancel)
         try:
             parts = data["candidates"][0]["content"]["parts"]
-            text, calls = [], []
+            text, calls, thoughts = [], [], []
             for p in parts:
                 if p.get("thought"):
+                    if isinstance(p.get("text"), str) and p["text"].strip():
+                        thoughts.append(p["text"].strip())
                     continue
                 if "text" in p:
                     text.append(p["text"])
@@ -301,6 +361,8 @@ class Provider:
                     calls.append({"id": uid_call(), "type": "function", "function": {
                         "name": c["name"], "arguments": json.dumps(c.get("args", {}))}})
             message = {"role": "assistant", "content": "".join(text)}
+            if thoughts:
+                message["thoughts"] = "\n".join(thoughts)
             if calls:
                 message["tool_calls"] = calls
                 message["native_parts"] = [p for p in parts if "functionCall" in p]
@@ -413,7 +475,14 @@ Available tool schemas:\n""" + json.dumps(tools, ensure_ascii=False)
             return {"role": "assistant", "content": output}, {}
         try:
             clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", output).strip()
-            result = json.loads(clean)
+            try:
+                result = json.loads(clean)
+            except ValueError:
+                # Some models wrap the JSON object in a sentence; accept only a complete object.
+                start, end = clean.find("{"), clean.rfind("}")
+                if start < 0 or end <= start:
+                    raise
+                result = json.loads(clean[start:end + 1])
             if result.get("type") == "tool_calls":
                 calls = result.get("calls", [])
                 if not isinstance(calls, list) or not calls or len(calls) > 8:

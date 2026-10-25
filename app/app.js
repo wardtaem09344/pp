@@ -588,7 +588,7 @@ function statusHTML(m) {
   if (meta.mode === 'agent') {
     const n = (meta.sources || []).length; const stp = meta.steps || [];
     const label = meta.status === 'completed_unverified' ? (LANG === 'ar' ? 'انتهت الاستجابة دون تحقق مستقل' : 'Response finished, not independently verified') : meta.status && meta.status !== 'completed' ? meta.status : t('agent_done');
-    return `<div class="apex-strategy" dir="auto">${esc(meta.strategy?.strategy || '')} · ${esc((meta.strategy?.profiles || []).join(' + '))}</div><details class="research-done agent-done"><summary>${icon('agentRun')}<span>${esc(label)} · ${esc(fmtDur(meta.seconds))}${n ? ' · ' + esc(t('sources_n', n)) : ''}</span>${icon('chevron')}</summary>
+    return `<details class="research-done agent-done"><summary>${icon('agentRun')}<span>${esc(label)} · ${esc(fmtDur(meta.seconds))}${n ? ' · ' + esc(t('sources_n', n)) : ''}</span>${icon('chevron')}</summary>
       <div class="rs-body">${stp.map((st, i) => agStepHTML(st, i, false, true)).join('')}</div></details>${agFilesHTML(stp)}`;
   }
   if (meta.mode === 'search' && meta.think) {
@@ -1129,7 +1129,7 @@ async function send({ text, regenerate = false, editId = null } = {}) {
           }
         } else if (ev === 'strategy') {
           asst.meta.strategy = data;
-          if (mode === 'agent') { live.steps.push({kind:'plan',plan: data.strategy + ' · ' + data.profiles.join(' + ')}); drawAgent(); }
+          /* routing labels are keyword guesses, not work: never shown as an agent step */
         } else if (ev === 'tool') {
           if (mode === 'agent') {
             const lbl = toolLabel(data.name);
