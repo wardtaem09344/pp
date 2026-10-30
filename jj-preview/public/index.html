@@ -200,9 +200,11 @@ iframe.run{width:100%;height:62dvh;border:0;background:#fff;border-radius:12px;m
 .th:not(.live).open .tl-ic{transform:rotate(90deg)}
 /* نافذة بارتفاع ثابت وتمرير تلقائي لآخر السطور، بحواف باهتة من فوق وتحت */
 .twin{padding-right:6px}
-.twin.win{max-height:230px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%)}
-.twin.win::-webkit-scrollbar{display:none}
-.twin.win.sm{max-height:170px}
+.twin.win{max-height:min(440px,46vh);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%)}
+.twin.win.live{max-height:min(440px,46vh)}
+.twin.win.complete{max-height:none;overflow:visible;overscroll-behavior:auto;-webkit-mask-image:none;mask-image:none}
+.twin.win::-webkit-scrollbar{width:5px}
+.twin.win::-webkit-scrollbar-thumb{background:#5558;border-radius:8px}
 /* توهج أزرق على حواف شريط الكتابة: في الشاشة الرئيسية، وعند لمس الشريط والبدء بالكتابة؛ يختفي عند الإرسال */
 .cbox{position:relative}
 .cbox::after{content:'';position:absolute;inset:-2px;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .7s ease;box-shadow:0 0 0 1.5px #5b7cff,0 0 14px 2px #4d6bfe99,0 0 36px 8px #4d6bfe44}
@@ -514,7 +516,7 @@ function rules(tools,deep,o){o=o||{};
   t+=`${n++}) ستصلك النتائج مرقّمة [1] [2]... وإن احتجت تفاصيل صفحة اطلب: <read>1,3</read> ثم توقف فورًا (حتى ${deep?5:3} صفحات). ويمكنك البحث مجددًا بعبارة مختلفة إن لم تكفِ النتائج.\n`;
   if(deep)t+=`${n++}) وضع البحث المعمّق (مفعّل الآن): ابحث 3 مرات على الأقل (وحتى 6) بعبارات مختلفة تمامًا في زواياها: المفهوم العام، أحدث التطورات، المصطلحات المتخصصة، آراء الخبراء، ومرة بالإنجليزية على الأقل. النتائج تشمل الأخبار والمجلات والأبحاث العلمية وويكيبيديا. بعد ذلك افتح بالقراءة 3 إلى 5 مصادر موثوقة واختر الأقدر على الإجابة، وقارن بينها. ثم اكتب إجابة مفصّلة ومعمّقة.\n`;
  }
- if(o.inline)t+=`${n++}) ابدأ ردك بكتلة <think>…</think> مختصرة جدًا (حتى 8 أسطر) تحلل فيها المهمة وتخطط، ثم اكتب الإجابة النهائية مباشرة بعدها.\n`;
+ if(o.inline)t+=`${n++}) ابدأ بموجز خطة قابل للعرض للمستخدم (حتى 8 أسطر): فهم المطلوب والخطوات العامة ونقاط التحقق، دون كشف الاستدلال الداخلي التفصيلي، ثم اكتب الإجابة النهائية مباشرة بعدها.\n`;
  t+=`${n}) عندما تكتمل معلوماتك اكتب الإجابة النهائية مباشرة بتنسيق ماركداون واضح${(tools||o.cite)?'، واستشهد بالمصادر بأرقامها مثل [1] بعد الجمل التي تعتمد عليها، ولا تذكر مصدرًا لم تستلمه':''}.${o.inline?'':' لا تكتب وسم <think> ولا أي تفكير ظاهر.'}\nلا تخترع نتائج بحث، ولا تكتب وسوم <search> أو <read> داخل الإجابة النهائية.${o.code?'\n'+CODE_RULES:''}\n[نهاية التعليمات]\n\n`;
  return t}
 const userPrompt=m=>{let t=m.text||'';(m.files||[]).forEach(f=>{t+=`\n\n[ملف مرفق: ${f.name}]\n\`\`\`\n${f.content}\n\`\`\``});return t.trim()};
@@ -554,8 +556,8 @@ function planLocal(um,cands,cap){
  if(!keys.length)keys.push((cands[0]||MB.deepseek).key);
  const writer=code&&keys.includes('qwen-coder')?'qwen-coder':(health[S.model]?.ok!==false?S.model:keys[keys.length-1]);
  return{keys,writer,code}}
-const THINK_CAP=12000;
-/* التفكير بالتوازي + بحث معمّق متداخل معه: لا انتظار متسلسل */
+const THINK_CAP=20000;
+/* مراحل التفكير والبحث متسلسلة: النماذج أولًا، ثم البحث، ثم قراءة المصادر */
 async function deepPrep(convo,um,sig,a,hb,o){
  const cands=MODELS.filter(x=>teamKeys().includes(x.key)&&health[x.key]?.ok!==false),cap=Math.min(3,Math.max(1,cands.length));
  const pl=planLocal(um,cands,cap);
@@ -563,38 +565,41 @@ async function deepPrep(convo,um,sig,a,hb,o){
  const research=!!o.deepS&&!o.trivial&&(String(um.text||'').length>450||/ابحث|بحث|مصادر|مراجع|أحدث|آخر التطورات|دراسة|مقارنة مصادر|research|latest|sources|papers|benchmark/i.test(String(um.text||'')));
  if(pl.keys.length===1&&!research)return{inline:true,writer:pl.writer,team:'',ctx:'',researched:false};
  const abortErr=()=>{if(sig.aborted){const e=new Error('أوقفه المستخدم');e.aborted=true;throw e}};
- const its=pl.keys.map(k=>({type:'mthink',key:k,text:'',status:'running',t0:Date.now()}));its.forEach(i=>a.items.push(i));
- let ds=null;const tasks=[],doneQ=new Set(),userQ=normQ(um.text);
- if(research){ds={type:'dsearch',status:'running',queries:[],done:0,total:0};a.items.push(ds)}
+ const its=pl.keys.map(k=>({type:'mthink',key:k,text:'',status:'queued',t0:0}));its.forEach(i=>a.items.push(i));
+ let ds=null;const doneQ=new Set(),userQ=normQ(um.text);
+ if(research){ds={type:'dsearch',status:'queued',queries:[],done:0,total:0};a.items.push(ds)}
  const addSources=items=>{for(const x of items){if(a.sources.length>=70)break;if(!a.sources.some(s=>s.url===x.url))a.sources.push(x)}};
- const launch=(qs,lim)=>{if(!ds)return;lim=lim||12;for(const q0 of qs){const q=String(q0).replace(/\s+/g,' ').trim();if(q.length<4)continue;const qn=normQ(q);
-   if(doneQ.has(qn)||similarQ(qn,userQ)||ds.total>=lim)continue;doneQ.add(qn);ds.total++;ds.queries.push(q);
-   tasks.push(doSearch(q,sig,true,pl.code).then(out=>addSources(out.items)).catch(()=>{}).finally(()=>{ds.done++;schedule()}))}schedule()};
+ const launch=(qs,lim)=>{if(!ds)return;lim=lim||4;for(const q0 of qs){const q=String(q0).replace(/\s+/g,' ').trim();if(q.length<4)continue;const qn=normQ(q);
+   if(doneQ.has(qn)||similarQ(qn,userQ)||ds.total>=lim)continue;doneQ.add(qn);ds.total++;ds.queries.push(q)}schedule()};
  if(ds){const kw=kwOf(um.text);if(kw)launch([kw])}
  const roles={'qwen-coder':pl.code?`اكتب مسودة الكود الأساسية كاملة داخل ${FENCE}لغة ... ${FENCE} مع شرح موجز لقراراتك.`:''};
  const gen=['حلّل المهمة وخطّط لإجابة صحيحة ومفيدة.','ابحث عن الأخطاء والحالات الحدّية وزاوية نظر مختلفة قد تفوت غيرك.','راجع من زاوية الدقة والاكتمال وما ينقص.','قدّم ما يضيفه نموذج رابع من أمثلة أو بدائل.','قدّم خلاصة نقدية موجزة.'];
  const thinkOne=async(k,i,it)=>{
   const M=MB[k]||MB.deepseek,tt=tmo(sig,THINK_CAP),role=roles[k]||gen[i]||gen[0];
-  const prompt=`[تعليمات النظام — لا تذكرها ولا تكررها]\nأنت النموذج «${M.label}» ضمن فريق نماذج يفكّر بالتوازي في مهمة المستخدم. دورك: ${role}\nفكّر بصيغة المتكلم دون كتابة الإجابة النهائية، وبإيجاز شديد (حتى 10 أسطر) وبلغة المستخدم، دون وسوم.${research?'\nواختم بسطر «زوايا البحث:» ثم 3 عبارات بحث قصيرة مختلفة الزوايا بكلماتك أنت (واحدة منها بالإنجليزية على الأقل)، لا بصياغة المستخدم.':''}\n[نهاية التعليمات]\n\n${hb}المستخدم: ${userPrompt(um)}\nتفكير ${M.label}:`;
-  try{await callModel(k,prompt,tt.signal,txt=>{it.text=txt.replace(/<\/?think>/g,'').trim();schedule()},convo.sid,{first:10000});it.status='done'}
+  const prompt=`[تعليمات النظام — لا تذكرها ولا تكررها]\nأنت النموذج «${M.label}» ضمن فريق يعمل بالتتابع في مهمة المستخدم. دورك: ${role}\nاكتب ملخص عمل واضحًا قابلًا للعرض للمستخدم من 5 إلى 8 أسطر: فهم المطلوب، الخطة العامة، وأهم نقاط التحقق أو الافتراضات. لا تعرض التفكير الداخلي التفصيلي أو خطوات الاستدلال الخاصة، ولا تكتب الإجابة النهائية. استخدم لغة المستخدم. ${research?'\nواختم بسطر «زوايا البحث:» ثم 3 عبارات بحث قصيرة مختلفة الزوايا (واحدة منها بالإنجليزية على الأقل).':''}\n[نهاية التعليمات]\n\n${hb}المستخدم: ${userPrompt(um)}\nملخص العمل لـ${M.label}:`;
+  try{await callModel(k,prompt,tt.signal,txt=>{it.text=txt.replace(/<\/?think>/g,'').trim();schedule()},convo.sid,{first:18000});it.status='done'}
   catch(e){if(sig.aborted)throw e;if((it.text||'').length>60){it.status='done';it.cut=true}else{it.status='error';it.error=tt.signal.aborted?'انتهت المهلة':e.message}}
   finally{tt.done()}
   it.ms=Date.now()-it.t0;schedule();
   if(it.text)launch(anglesOf(it.text))};
- await Promise.all(pl.keys.map((k,i)=>thinkOne(k,i,its[i])));abortErr();
+ for(let i=0;i<pl.keys.length;i++){const it=its[i];it.status='running';it.t0=Date.now();schedule();await thinkOne(pl.keys[i],i,it);abortErr()}
  const team=its.filter(i=>i.status==='done'&&i.text).map(i=>'['+((MB[i.key]||{}).label||i.key)+']\n'+i.text.replace(/زوايا البحث[\s\S]*$/,'').trim().slice(0,2000)).join('\n\n');
  let ctx='',researched=false;
- if(ds){await Promise.all(tasks);abortErr();
-  if(a.sources.length<3&&a.sources.length>0){launch(a.sources.slice(0,3).map(x=>String(x.title||'').split(/\s+/).slice(0,8).join(' ')),3);await Promise.all(tasks);abortErr()}
+ if(ds){
+  ds.status='running';schedule();let cursor=0;
+  const runQueued=async()=>{while(cursor<ds.queries.length){abortErr();const q=ds.queries[cursor++];
+   try{const out=await doSearch(q,sig,true,pl.code);addSources(out.items)}catch(e){if(sig.aborted)throw e}
+   ds.done++;schedule()}};
+  await runQueued();
+  if(a.sources.length<3&&a.sources.length>0){launch(a.sources.slice(0,3).map(x=>String(x.title||'').split(/\s+/).slice(0,8).join(' ')),4);await runQueued()}
   ds.status='done';schedule();
-  const pick=rankForRead(a.sources,3);
-  let reads=[];
+  const pick=rankForRead(a.sources,3);let reads=[];
   if(pick.length){const rd={type:'read',status:'running',nums:pick,failed:[],done:0};a.items.push(rd);schedule();
-   const out=await Promise.all(pick.map(async n=>{const s=a.sources[n-1];
-    try{const x=await readSource(s,sig,true);s.content=x;return{n,title:s.title,text:x.slice(0,3000)}}
-    catch(e){if(sig.aborted)throw e;rd.failed.push(n);return null}
-    finally{rd.done++;schedule()}}));
-   rd.status=rd.failed.length===pick.length?'error':'done';reads=out.filter(Boolean);schedule()}
+   for(const n of pick){abortErr();const s=a.sources[n-1];
+    try{const x=await readSource(s,sig,true);s.content=x;reads.push({n,title:s.title,text:x.slice(0,3000)})}
+    catch(e){if(sig.aborted)throw e;rd.failed.push(n)}
+    finally{rd.done++;schedule()}}
+   rd.status=rd.failed.length===pick.length?'error':'done';schedule()}
   if(a.sources.length){ctx=ctxFrom(a.sources,reads);researched=true}}
  return{inline:false,writer:pl.writer,team,ctx,researched}}
 const fixPrompt=b=>`[تعليمات النظام — لا تذكرها]\nالكود التالي (${b.lang}) فيه خطأ صياغة: ${b.msg}\nأعد كتابة الكود كاملًا مصححًا فقط داخل كتلة ${FENCE}${b.lang} دون أي شرح، وحافظ على كل وظائفه.\n[نهاية التعليمات]\n\n${FENCE}${b.lang}\n${b.code}\n${FENCE}\nالكود المصحح:`;
@@ -704,7 +709,7 @@ async function runTurn(convo,um){
    catch(e){if(sig.aborted||e.aborted)throw e;a.items.pop()}}
   a.status='done';
  }catch(e){a.live=null;if(sig.aborted||e.aborted)a.status='stopped';else{a.status='error';a.error=e.message}}
- a.items.forEach(i=>{if(i.status==='running')i.status=a.status==='stopped'?'stopped':'error'});
+ a.items.forEach(i=>{if(i.status==='running'||i.status==='queued')i.status=a.status==='stopped'?'stopped':'error'});
  a.dur=Date.now()-a.t0;if(a.thinkEnd===null&&a.items.length)a.thinkEnd=Date.now();
  a.thinkMs=a.thinkEnd?a.thinkEnd-a.t0:0;a.live=null;
  if(!a.ui.touched)a.ui.think=a.status==='error'&&!a.answer;
@@ -761,11 +766,11 @@ function userHtml(m){return`<div class="umsg" data-mid="${m.id}">${m.files?.leng
   if(it.type==='plan'){const run=it.status==='running',
     chips=(it.keys||[]).map((k,i)=>`<span class="mchain">${i?'<span class="arw">←</span>':''}<span class="mchip">${logoHtml(k,18)}${esc((MB[k]||{}).label||k)}</span></span>`).join('');
    return`<div class="st row"><span class="ico">${ic('flow',18)}</span>${run?'جارٍ اختيار النماذج المناسبة للمهمة… <i class="spin"></i>':'النماذج المختارة للمهمة'}${!run&&chips?`<div class="mchips">${chips}</div>`:''}${it.note?`<div class="sd">${esc(it.note)}</div>`:''}</div>`}
-  if(it.type==='dsearch'){const run=it.status==='running',hs=new Set(m.sources.map(x=>x.host)).size;
-   return`<div class="st row"><span class="ico">${ic('search',18)}</span>${run?`بحث معمّق: ${it.done}/${it.total} عمليات بحث · ${m.sources.length} مصدرًا <i class="spin"></i>`:`بحث معمّق: ${m.sources.length} مصدرًا من ${hs} موقعًا`} ${favHtml(m.sources.slice(0,6))}${it.queries.length?`<div class="mchips">${it.queries.map(q=>`<span class="mchip">${esc(q)}</span>`).join('')}</div>`:''}</div>`}
+  if(it.type==='dsearch'){const run=it.status==='running',queued=it.status==='queued',hs=new Set(m.sources.map(x=>x.host)).size;
+   return`<div class="st row"><span class="ico">${ic('search',18)}</span>${queued?'سيبدأ البحث بعد انتهاء النماذج':run?`بحث معمّق: ${it.done}/${it.total} عمليات بحث · ${m.sources.length} مصدرًا <i class="spin"></i>`:`بحث معمّق: ${m.sources.length} مصدرًا من ${hs} موقعًا`} ${favHtml(m.sources.slice(0,6))}${it.queries.length?`<div class="mchips">${it.queries.map(q=>`<span class="mchip">${esc(q)}</span>`).join('')}</div>`:''}</div>`}
   if(it.type==='fix')return`<div class="st row"><span class="ico">${ic('check',18)}</span>${it.status==='running'?'تم اكتشاف خطأ في الكود، جارٍ تصحيحه… <i class="spin"></i>':'تم تصحيح خطأ في الكود تلقائيًا'}</div>`;
   if(it.type==='mthink'){const run=it.status==='running',M=MB[it.key]||{label:it.key},
-    st=run?'يفكّر… <i class="spin"></i>':it.status==='done'?`انتهى · ${fmtMs(it.ms)}${it.cut?' (مقتطع بالمهلة)':''}`:it.status==='stopped'?'أُوقف':'تعذّر';
+    st=run?'يفكّر… <i class="spin"></i>':it.status==='queued'?'بانتظار دوره…':it.status==='done'?`انتهى · ${fmtMs(it.ms)}${it.cut?' (مقتطع بالمهلة)':''}`:it.status==='stopped'?'أُوقف':'تعذّر';
    return`<div class="st mod ${it.closed?'closed':''}"><span class="ico ml">${logoHtml(it.key,26)}</span><button class="mh" data-act="toggle-mt" data-i="${i}"><b>${esc(M.label)}</b><span class="mst">${st}</span><span class="chev">${ic('chev',14)}</span></button>${it.closed?'':`<div class="tx">${thinkHtml(it.text||'')}${run?'<span class="caret"></span>':''}${it.error?`<div class="sd" style="color:var(--red)">${esc(it.error)}</div>`:''}</div>`}</div>`}
   if(it.type==='think')return`<div class="st"><span class="dot"></span><div class="tx">${thinkHtml(it.text)}${it.open?'<span class="caret"></span>':''}</div></div>`;
   if(it.type==='search'){const src=it.idx.map(n=>m.sources[n-1]).filter(Boolean);
@@ -785,7 +790,7 @@ function assistantHtml(m){
    secs=Math.max(1,Math.round((m.thinkMs||0)/1000)),dur=secs<60?`${secs} ثانية`:`${Math.floor(secs/60)} د ${secs%60} ث`,
    label=thinking?(items.some(x=>isWeb(x)&&x.status==='running')?'يتصفح الويب':'التفكير'):(m.thinkMs>0&&m.status!=='stopped'?`تم التفكير لمدة ${dur}`:'التفكير');
   h+=`<button class="th ${thinking?'live':''} ${open?'open':''}" data-act="toggle-think"><span>${label}</span><span class="tl-ic">${ic(thinking?'updown':'chev',18)}</span></button>`;
-  if(open)h+=`<div class="twin win ${hasWeb?'':'sm'}"><div class="tl">${timelineHtml(m,items)}${thinking&&!runI?'<div class="st"><span class="dot"></span></div>':''}</div></div>`}
+  if(open)h+=`<div class="twin win ${m.status==='running'?'live':'complete'} ${hasWeb?'':'sm'}"><div class="tl">${timelineHtml(m,items)}${thinking&&!runI?'<div class="st"><span class="dot"></span></div>':''}</div></div>`}
  if(m.note)h+=`<div class="sd" style="margin:0 0 6px">${esc(m.note)}</div>`;
  if(m.answer&&m.byDiff&&m.by)h+=`<div class="by">${logoHtml(m.by,16)}كُتبت بواسطة ${esc((MB[m.by]||{}).label||m.by)}</div>`;
  if(m.answer)h+=`<div class="ans">${md(m.answer,n)}</div>`;
