@@ -522,7 +522,7 @@ function histText(convo,upto){
  return convo.messages.slice(0,upto).filter(m=>m.role==='user'||finalText(m)).slice(-S.historyN).map(m=>(m.role==='user'?'المستخدم':'المساعد')+': '+(m.role==='user'?m.text:finalText(m)).slice(0,1500)).join('\n')}
 const fmtSrc=(s,n)=>`[${n}] ${s.title} — ${s.host}${s.date?' — '+s.date:''}${s.snippet?'\n'+s.snippet.slice(0,400):''}`;
 
-let rafId=0;const schedule=()=>{if(rafId)return;rafId=requestAnimationFrame(()=>{rafId=0;if(cur)updateLive()})};
+let rafId=0,lastPaint=0;const schedule=()=>{if(rafId)return;const wait=Math.max(0,110-(performance.now()-lastPaint));rafId=setTimeout(()=>{rafId=0;lastPaint=performance.now();if(cur)updateLive()},wait)};
 
 const FENCE='`'.repeat(3);
 const STOPW=new Set('ما ماذا هل من في على إلى الى عن مع هذا هذه ذلك التي الذي كيف لماذا أين متى هو هي أن ان كان يكون لي لك لنا اكتب اعمل سوي ابحث قل أريد اريد بدي ممكن يمكن اشرح لي the a an of to in on for and or is are was be how what why with about please can you me my'.split(' '));
@@ -545,7 +545,8 @@ function ctxFrom(src,reads){
 function planLocal(um,cands,cap){
  const t=String((um&&um.text)||''),len=t.length,code=isCodeTask(um),
   hard=len>350||/حلل|قارن|مقارنة|بالتفصيل|خطوة|خطة|استراتيجية|تصميم|architecture|optimi[sz]|compare|analy[sz]e/i.test(t);
- let want=1+(code?1:0)+(S.smartSearch&&!isTrivial(um)?1:0)+(hard?1:0)+(len>900?1:0);want=Math.max(1,Math.min(cap,want));
+ const research=S.smartSearch&&!isTrivial(um),veryHard=len>1200||/قارن.*(?:ثلاث|عدة|مختلف)|حلل.*(?:شامل|متعمق)|خطه.*(?:كامله|مفصله)|دراسة جدوى|مراجعة شاملة|architecture|trade-?offs|benchmark|multi[- ]step|comprehensive|in[- ]depth/i.test(t);
+ let want=1+(code?1:0)+(hard?1:0)+(veryHard?1:0)+(research?1:0);want=Math.max(1,Math.min(cap,want));
  const pref=[];if(code)pref.push('qwen-coder','deepseek','claude');if(S.smartSearch)pref.push('gemini','grok','deepseek');if(hard)pref.push('claude','gpt-5','qwen');
  pref.push(S.model,'deepseek','gemini','qwen','claude','gpt-5','grok','qwen-coder');
  const keys=[];for(const k of pref){if(keys.length>=want)break;if(cands.some(c=>c.key===k)&&!keys.includes(k))keys.push(k)}
@@ -657,7 +658,12 @@ async function runTurn(convo,um){
    const p=parseRound(raw);a.live=null;
    const wants=!noTools&&(p.search||(p.read&&p.read.length));
    if(!wants&&needMore()){scratch+=`\n[تنبيه النظام] وضع البحث المعمّق يتطلب ${nSearch<3?`${3-nSearch} عمليات بحث إضافية على الأقل بعبارات مختلفة الزوايا`:'قراءة صفحتين على الأقل من المصادر'} قبل الإجابة. لا تكتب الإجابة النهائية الآن؛ اطلب ${nSearch<3?'<search>…</search>':'<read>…</read>'}.\n`;a.answer='';continue}
-   if(!wants){a.answer=p.answer;if(!a.answer)throw new Error('لم يُنتج النموذج إجابة نهائية (كتب تفكيرًا فقط). أعد المحاولة.');break}
+   if(!wants){a.answer=p.answer;if(!a.answer){
+    const forcePrompt=rules(false,false,{code})+hb+`المستخدم: ${userPrompt(um)}\\n`+team+scratch+`\\n[مهم جدًا] انتهى التحليل. اكتب الآن الإجابة النهائية للمستخدم مباشرة، ولا تكتب تفكيرًا أو وسوم أدوات. إذا لم تكفِ المعلومات، اذكر حدودها ثم قدّم أفضل إجابة ممكنة.\\nالمساعد:`;
+    let recovered='',lastErr=null;const candidates=[...new Set([ansKey,...chain.filter(k=>k!==ansKey)])].slice(0,3);
+    for(const k of candidates){try{const rawFinal=await callModel(k,forcePrompt,sig,t=>{const q=parseRound(t);if(q.answer){recovered=q.answer;a.answer=recovered;schedule()}},convo.sid,{first:18000});const q=parseRound(rawFinal);if(q.answer){recovered=q.answer;ansKey=k;break}}catch(e){if(sig.aborted||e.aborted)throw e;lastErr=e}}
+    a.answer=recovered;if(!a.answer)throw new Error(lastErr?`تعذّر توليد الإجابة النهائية: ${lastErr.message}`:'لم يُنتج النموذج إجابة نهائية بعد محاولات الاسترداد. أعد المحاولة.');
+   }break}
    a.answer='';a.thinkEnd=null;
    if(p.search){
     const qn=normQ(p.search);
@@ -773,7 +779,7 @@ function assistantHtml(m){
  let h=`<div class="amsg" data-mid="${m.id}">`;
  if(items.length){
   const thinking=live&&!m.answer,isWeb=x=>x.type==='search'||x.type==='read'||x.type==='dsearch',hasWeb=items.some(isWeb),
-   open=thinking?m.ui.think!==false:(m.ui.touched?!!m.ui.think:items.length>0),
+   open=thinking?m.ui.think!==false:(m.ui.touched?!!m.ui.think:false),
    secs=Math.max(1,Math.round((m.thinkMs||0)/1000)),dur=secs<60?`${secs} ثانية`:`${Math.floor(secs/60)} د ${secs%60} ث`,
    label=thinking?(items.some(x=>isWeb(x)&&x.status==='running')?'يتصفح الويب':'التفكير'):(m.thinkMs>0&&m.status!=='stopped'?`تم التفكير لمدة ${dur}`:'التفكير');
   h+=`<button class="th ${thinking?'live':''} ${open?'open':''}" data-act="toggle-think"><span>${label}</span><span class="tl-ic">${ic(thinking?'updown':'chev',18)}</span></button>`;
