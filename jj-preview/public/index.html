@@ -193,14 +193,14 @@ iframe.run{width:100%;height:62dvh;border:0;background:#fff;border-radius:12px;m
 .mchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 11px 3px 9px;font-size:13px;color:#d4d5d9;white-space:nowrap}
 .mchain .arw{flex:none}
 /* رأس الخط الزمني: «يتصفح الويب / التفكير» مع سهمين أثناء العمل، ثم «تم التفكير لمدة…» قابل للطي */
-.th{display:flex;align-items:center;gap:8px;padding:4px 0 8px;color:#d4d5d9;font-size:15.5px;text-align:right}
+.th{display:flex;align-items:center;gap:8px;padding:9px 4px 11px;cursor:pointer;user-select:none;color:#d4d5d9;font-size:15.5px;text-align:right}
 .th .tl-ic{display:inline-flex;color:var(--muted);transition:transform .2s}
 .th.live .tl-ic{color:var(--blue-soft)}
 .th:not(.live) .tl-ic{transform:rotate(-90deg)}
 .th:not(.live).open .tl-ic{transform:rotate(90deg)}
 /* نافذة بارتفاع ثابت وتمرير تلقائي لآخر السطور، بحواف باهتة من فوق وتحت */
 .twin{padding-right:6px}
-.twin.win{max-height:270px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%)}
+.twin.win{max-height:230px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%)}
 .twin.win::-webkit-scrollbar{display:none}
 .twin.win.sm{max-height:170px}
 /* توهج أزرق على حواف شريط الكتابة: في الشاشة الرئيسية، وعند لمس الشريط والبدء بالكتابة؛ يختفي عند الإرسال */
@@ -522,7 +522,7 @@ function histText(convo,upto){
  return convo.messages.slice(0,upto).filter(m=>m.role==='user'||finalText(m)).slice(-S.historyN).map(m=>(m.role==='user'?'المستخدم':'المساعد')+': '+(m.role==='user'?m.text:finalText(m)).slice(0,1500)).join('\n')}
 const fmtSrc=(s,n)=>`[${n}] ${s.title} — ${s.host}${s.date?' — '+s.date:''}${s.snippet?'\n'+s.snippet.slice(0,400):''}`;
 
-let rafId=0,lastPaint=0;const schedule=()=>{if(rafId)return;const wait=Math.max(0,110-(performance.now()-lastPaint));rafId=setTimeout(()=>{rafId=0;lastPaint=performance.now();if(cur)updateLive()},wait)};
+let rafId=0,lastPaint=0;const schedule=()=>{if(rafId)return;const wait=Math.max(0,160-(performance.now()-lastPaint));rafId=setTimeout(()=>{rafId=0;lastPaint=performance.now();if(cur)updateLive()},wait)};
 
 const FENCE='`'.repeat(3);
 const STOPW=new Set('ما ماذا هل من في على إلى الى عن مع هذا هذه ذلك التي الذي كيف لماذا أين متى هو هي أن ان كان يكون لي لك لنا اكتب اعمل سوي ابحث قل أريد اريد بدي ممكن يمكن اشرح لي the a an of to in on for and or is are was be how what why with about please can you me my'.split(' '));
@@ -553,13 +553,13 @@ function planLocal(um,cands,cap){
  if(!keys.length)keys.push((cands[0]||MB.deepseek).key);
  const writer=code&&keys.includes('qwen-coder')?'qwen-coder':(health[S.model]?.ok!==false?S.model:keys[keys.length-1]);
  return{keys,writer,code}}
-const THINK_CAP=22000;
+const THINK_CAP=12000;
 /* التفكير بالتوازي + بحث معمّق متداخل معه: لا انتظار متسلسل */
 async function deepPrep(convo,um,sig,a,hb,o){
- const cands=MODELS.filter(x=>teamKeys().includes(x.key)&&health[x.key]?.ok!==false),cap=Math.min(5,Math.max(1,cands.length));
+ const cands=MODELS.filter(x=>teamKeys().includes(x.key)&&health[x.key]?.ok!==false),cap=Math.min(3,Math.max(1,cands.length));
  const pl=planLocal(um,cands,cap);
  a.items.push({type:'plan',status:'done',keys:pl.keys});schedule();
- const research=!!o.deepS&&!o.trivial;
+ const research=!!o.deepS&&!o.trivial&&(String(um.text||'').length>450||/ابحث|بحث|مصادر|مراجع|أحدث|آخر التطورات|دراسة|مقارنة مصادر|research|latest|sources|papers|benchmark/i.test(String(um.text||'')));
  if(pl.keys.length===1&&!research)return{inline:true,writer:pl.writer,team:'',ctx:'',researched:false};
  const abortErr=()=>{if(sig.aborted){const e=new Error('أوقفه المستخدم');e.aborted=true;throw e}};
  const its=pl.keys.map(k=>({type:'mthink',key:k,text:'',status:'running',t0:Date.now()}));its.forEach(i=>a.items.push(i));
@@ -575,7 +575,7 @@ async function deepPrep(convo,um,sig,a,hb,o){
  const thinkOne=async(k,i,it)=>{
   const M=MB[k]||MB.deepseek,tt=tmo(sig,THINK_CAP),role=roles[k]||gen[i]||gen[0];
   const prompt=`[تعليمات النظام — لا تذكرها ولا تكررها]\nأنت النموذج «${M.label}» ضمن فريق نماذج يفكّر بالتوازي في مهمة المستخدم. دورك: ${role}\nفكّر بصيغة المتكلم دون كتابة الإجابة النهائية، وبإيجاز شديد (حتى 10 أسطر) وبلغة المستخدم، دون وسوم.${research?'\nواختم بسطر «زوايا البحث:» ثم 3 عبارات بحث قصيرة مختلفة الزوايا بكلماتك أنت (واحدة منها بالإنجليزية على الأقل)، لا بصياغة المستخدم.':''}\n[نهاية التعليمات]\n\n${hb}المستخدم: ${userPrompt(um)}\nتفكير ${M.label}:`;
-  try{await callModel(k,prompt,tt.signal,txt=>{it.text=txt.replace(/<\/?think>/g,'').trim();schedule()},convo.sid,{first:15000});it.status='done'}
+  try{await callModel(k,prompt,tt.signal,txt=>{it.text=txt.replace(/<\/?think>/g,'').trim();schedule()},convo.sid,{first:10000});it.status='done'}
   catch(e){if(sig.aborted)throw e;if((it.text||'').length>60){it.status='done';it.cut=true}else{it.status='error';it.error=tt.signal.aborted?'انتهت المهلة':e.message}}
   finally{tt.done()}
   it.ms=Date.now()-it.t0;schedule();
@@ -584,9 +584,9 @@ async function deepPrep(convo,um,sig,a,hb,o){
  const team=its.filter(i=>i.status==='done'&&i.text).map(i=>'['+((MB[i.key]||{}).label||i.key)+']\n'+i.text.replace(/زوايا البحث[\s\S]*$/,'').trim().slice(0,2000)).join('\n\n');
  let ctx='',researched=false;
  if(ds){await Promise.all(tasks);abortErr();
-  if(a.sources.length<40&&a.sources.length>0){launch(a.sources.slice(0,8).map(x=>String(x.title||'').split(/\s+/).slice(0,8).join(' ')),18);await Promise.all(tasks);abortErr()}
+  if(a.sources.length<3&&a.sources.length>0){launch(a.sources.slice(0,3).map(x=>String(x.title||'').split(/\s+/).slice(0,8).join(' ')),3);await Promise.all(tasks);abortErr()}
   ds.status='done';schedule();
-  const pick=rankForRead(a.sources,8);
+  const pick=rankForRead(a.sources,3);
   let reads=[];
   if(pick.length){const rd={type:'read',status:'running',nums:pick,failed:[],done:0};a.items.push(rd);schedule();
    const out=await Promise.all(pick.map(async n=>{const s=a.sources[n-1];
@@ -607,7 +607,7 @@ function findBadCode(text){
  return null}
 async function runTurn(convo,um){
  const idx=convo.messages.indexOf(um)+1;
- const a={role:'assistant',id:uuidv7(),status:'running',t0:Date.now(),items:[],sources:[],answer:'',live:null,thinkEnd:null,ui:{think:true},fb:0};
+ const a={role:'assistant',id:uuidv7(),status:'running',t0:Date.now(),items:[],sources:[],answer:'',live:null,thinkEnd:null,ui:{think:false},fb:0};
  convo.messages.splice(idx,0,a);convo.messages.length=idx+1;
  running=true;ctl=new AbortController();const sig=ctl.signal;updateSend();renderChat(true);
  clearInterval(tick);tick=setInterval(schedule,1000);
@@ -779,7 +779,7 @@ function assistantHtml(m){
  let h=`<div class="amsg" data-mid="${m.id}">`;
  if(items.length){
   const thinking=live&&!m.answer,isWeb=x=>x.type==='search'||x.type==='read'||x.type==='dsearch',hasWeb=items.some(isWeb),
-   open=thinking?m.ui.think!==false:(m.ui.touched?!!m.ui.think:false),
+   open=thinking?m.ui.think===true:(m.ui.touched?!!m.ui.think:false),
    secs=Math.max(1,Math.round((m.thinkMs||0)/1000)),dur=secs<60?`${secs} ثانية`:`${Math.floor(secs/60)} د ${secs%60} ث`,
    label=thinking?(items.some(x=>isWeb(x)&&x.status==='running')?'يتصفح الويب':'التفكير'):(m.thinkMs>0&&m.status!=='stopped'?`تم التفكير لمدة ${dur}`:'التفكير');
   h+=`<button class="th ${thinking?'live':''} ${open?'open':''}" data-act="toggle-think"><span>${label}</span><span class="tl-ic">${ic(thinking?'updown':'chev',18)}</span></button>`;
