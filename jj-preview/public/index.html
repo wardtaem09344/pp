@@ -335,7 +335,8 @@ let health=LS.get('aim.health',{});
 let convos=LS.get('aim.convos',[]);
 let cfg={reachable:false,hasSearch:false,hasRead:false};
 let cur=null,running=false,ctl=null,files=[],speaking=null,tick=0;
-convos.forEach(c=>c.messages.forEach(m=>{if(m.status==='running'){m.status='stopped';m.live=null;(m.items||[]).forEach(i=>{if(i.status==='running')i.status='error'})}}));
+const interrupted=[];
+convos.forEach(c=>c.messages.forEach((m,i)=>{if(m.status==='running'){const um=c.messages.slice(0,i).reverse().find(x=>x.role==='user');m.status=um?'queued':'stopped';m.live=null;m.interruptedAt=Date.now();(m.items||[]).forEach(x=>{if(x.status==='running')x.status='paused'});if(um)interrupted.push({c,um,at:m.interruptedAt})}}));
 const saveS=()=>LS.set('aim.settings',S),saveC=()=>{if(!LS.set('aim.convos',convos.slice(0,60)))toast('تعذّر الحفظ (المساحة ممتلئة)')},saveH=()=>LS.set('aim.health',health);
 
 /* ═══════════════ الاتصال والبث ═══════════════ */
@@ -522,7 +523,7 @@ function histText(convo,upto){
  return convo.messages.slice(0,upto).filter(m=>m.role==='user'||finalText(m)).slice(-S.historyN).map(m=>(m.role==='user'?'المستخدم':'المساعد')+': '+(m.role==='user'?m.text:finalText(m)).slice(0,1500)).join('\n')}
 const fmtSrc=(s,n)=>`[${n}] ${s.title} — ${s.host}${s.date?' — '+s.date:''}${s.snippet?'\n'+s.snippet.slice(0,400):''}`;
 
-let rafId=0,lastPaint=0;const schedule=()=>{if(rafId)return;const wait=Math.max(0,160-(performance.now()-lastPaint));rafId=setTimeout(()=>{rafId=0;lastPaint=performance.now();if(cur)updateLive()},wait)};
+let rafId=0,lastPaint=0,lastPersist=0;const schedule=()=>{if(rafId)return;const wait=Math.max(0,160-(performance.now()-lastPaint));rafId=setTimeout(()=>{rafId=0;lastPaint=performance.now();if(cur)updateLive();if(Date.now()-lastPersist>900){lastPersist=Date.now();saveC()}},wait)};
 
 const FENCE='`'.repeat(3);
 const STOPW=new Set('ما ماذا هل من في على إلى الى عن مع هذا هذه ذلك التي الذي كيف لماذا أين متى هو هي أن ان كان يكون لي لك لنا اكتب اعمل سوي ابحث قل أريد اريد بدي ممكن يمكن اشرح لي the a an of to in on for and or is are was be how what why with about please can you me my'.split(' '));
@@ -967,7 +968,11 @@ document.querySelector('[data-top=share]').innerHTML=ic('share',24);
 document.querySelector('[data-top=new]').innerHTML=ic('newc',24);
 $('#getapp').innerHTML=ic('phone',20)+'تحميل التطبيق';$('#getapp').onclick=()=>toast('من قائمة المتصفح اختر «إضافة إلى الشاشة الرئيسية»');
 $('#scrollbtn').innerHTML=ic('arr',20);$('#attach').innerHTML=ic('clip',24);
-renderPills();renderFiles();renderChat();updateSend();loadCfg();
+renderPills();renderFiles();
+if(interrupted.length){const latest=interrupted.sort((a,b)=>b.at-a.at)[0];cur=latest.c;renderChat(true);toast('استعدنا المحادثة؛ جارٍ استكمال الطلب الذي انقطع');saveC();setTimeout(()=>{if(cur===latest.c&&!running)runTurn(latest.c,latest.um)},0)}else renderChat();
+updateSend();loadCfg();
+window.addEventListener('pagehide',()=>{try{saveC()}catch{}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){try{saveC()}catch{}}});
 })();
 </script>
 </body>
