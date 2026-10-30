@@ -610,8 +610,9 @@ async function runTurn(convo,um){
  const idx=convo.messages.indexOf(um)+1;
  const a={role:'assistant',id:uuidv7(),status:'running',t0:Date.now(),items:[],sources:[],answer:'',live:null,thinkEnd:null,ui:{think:false},fb:0};
  convo.messages.splice(idx,0,a);convo.messages.length=idx+1;
- running=true;ctl=new AbortController();const sig=ctl.signal;updateSend();renderChat(true);
- clearInterval(tick);tick=setInterval(schedule,1000);
+ /* احفظ نقطة الاستئناف فور إنشاء الرسالة، ثم احفظ تقدم التفكير والبحث دوريًا */
+ saveC();running=true;ctl=new AbortController();const sig=ctl.signal;updateSend();renderChat(true);
+ clearInterval(tick);let lastSave=0;tick=setInterval(()=>{schedule();if(Date.now()-lastSave>=1500){saveC();lastSave=Date.now()}},1000);
  try{
   let tools=S.smartSearch,max=tools?(S.deepThink?10:4):1;const deepS=!!(S.deepThink&&tools),code=isCodeTask(um);let scratch='',team='',nSearch=0,nRead=0,rejects=0,researched=false,inlineThink=false;
   const normQ=x=>String(x||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim(),userQ=normQ(um.text),doneQ=new Set();
