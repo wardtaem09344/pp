@@ -201,7 +201,7 @@ iframe.run{width:100%;height:62dvh;border:0;background:#fff;border-radius:12px;m
 /* نافذة بارتفاع ثابت وتمرير تلقائي لآخر السطور، بحواف باهتة من فوق وتحت */
 .twin{padding-right:6px}
 .twin.win{max-height:min(440px,46vh);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 28px,#000 calc(100% - 28px),transparent 100%)}
-.twin.win.live{max-height:min(440px,46vh)}
+.twin.win.live{max-height:min(440px,46vh);scroll-behavior:auto}
 .twin.win.complete{max-height:none;overflow:visible;overscroll-behavior:auto;-webkit-mask-image:none;mask-image:none}
 .twin.win::-webkit-scrollbar{width:5px}
 .twin.win::-webkit-scrollbar-thumb{background:#5558;border-radius:8px}
@@ -574,10 +574,11 @@ async function deepPrep(convo,um,sig,a,hb,o){
  if(ds){const kw=kwOf(um.text);if(kw)launch([kw])}
  const roles={'qwen-coder':pl.code?`اكتب مسودة الكود الأساسية كاملة داخل ${FENCE}لغة ... ${FENCE} مع شرح موجز لقراراتك.`:''};
  const gen=['حلّل المهمة وخطّط لإجابة صحيحة ومفيدة.','ابحث عن الأخطاء والحالات الحدّية وزاوية نظر مختلفة قد تفوت غيرك.','راجع من زاوية الدقة والاكتمال وما ينقص.','قدّم ما يضيفه نموذج رابع من أمثلة أو بدائل.','قدّم خلاصة نقدية موجزة.'];
- const thinkOne=async(k,i,it)=>{
+ const cleanThink=t=>{const seen=new Set();return String(t||'').replace(/\r/g,'').split(/\n+/).map(x=>x.trim()).filter(x=>{if(!x)return false;const k=x.toLocaleLowerCase();if(seen.has(k))return false;seen.add(k);return true}).join('\n')};
+  const thinkOne=async(k,i,it)=>{
   const M=MB[k]||MB.deepseek,tt=tmo(sig,THINK_CAP),role=roles[k]||gen[i]||gen[0];
   const prompt=`[تعليمات النظام — لا تذكرها ولا تكررها]\nأنت النموذج «${M.label}» ضمن فريق يعمل بالتتابع في مهمة المستخدم. دورك: ${role}\nاكتب ملخص عمل واضحًا قابلًا للعرض للمستخدم من 5 إلى 8 أسطر: فهم المطلوب، الخطة العامة، وأهم نقاط التحقق أو الافتراضات. لا تعرض التفكير الداخلي التفصيلي أو خطوات الاستدلال الخاصة، ولا تكتب الإجابة النهائية. استخدم لغة المستخدم. ${research?'\nواختم بسطر «زوايا البحث:» ثم 3 عبارات بحث قصيرة مختلفة الزوايا (واحدة منها بالإنجليزية على الأقل).':''}\n[نهاية التعليمات]\n\n${hb}المستخدم: ${userPrompt(um)}\nملخص العمل لـ${M.label}:`;
-  try{await callModel(k,prompt,tt.signal,txt=>{it.text=txt.replace(/<\/?think>/g,'').trim();schedule()},convo.sid,{first:18000});it.status='done'}
+  try{await callModel(k,prompt,tt.signal,txt=>{it.text=cleanThink(txt.replace(/<\/?think>/g,''));schedule()},convo.sid,{first:18000});it.status='done'}
   catch(e){if(sig.aborted)throw e;if((it.text||'').length>60){it.status='done';it.cut=true}else{it.status='error';it.error=tt.signal.aborted?'انتهت المهلة':e.message}}
   finally{tt.done()}
   it.ms=Date.now()-it.t0;schedule();
@@ -809,18 +810,18 @@ function renderChat(forceBottom){
  renderNotice();
  cur?.messages.forEach(m=>{if(m.role==='assistant'&&m.status==='running')syncTw(m)});syncGlow();
  if(near)chat.scrollTop=chat.scrollHeight;onScroll()}
-function syncTw(m){const el=chat.querySelector(`[data-mid="${m.id}"]`),w=el&&el.querySelector('.twin.win');if(!w)return;
- w.scrollTop=m.ui.pin===false?(m.ui.tw||0):w.scrollHeight;
- w.addEventListener('scroll',()=>{m.ui.tw=w.scrollTop;m.ui.pin=w.scrollHeight-w.scrollTop-w.clientHeight<30},{passive:true})}
-function syncGlow(){const home=$('#app').classList.contains('home');cbox.classList.toggle('glow',!running&&(home||(document.activeElement===ta&&!!ta.value.trim())))}
+function syncTw(m){const el=chat.querySelector('[data-mid="'+m.id+'"]'),w=el&&el.querySelector('.twin.win');if(!w)return;
+  w.scrollTop=w.scrollHeight;m.ui.pin=true;m.ui.tw=w.scrollTop;
+  if(w.dataset.scrollBound!=='1'){w.dataset.scrollBound='1';w.addEventListener('scroll',()=>{if(m.status==='running')w.scrollTop=w.scrollHeight;m.ui.tw=w.scrollTop},{passive:true})}}
+ function syncGlow(){const home=$('#app').classList.contains('home');cbox.classList.toggle('glow',!running&&(home||(document.activeElement===ta&&!!ta.value.trim())))}
 function updateLive(){const m=cur?.messages[cur.messages.length-1];if(!m||m.role!=='assistant')return;
  const el=chat.querySelector(`[data-mid="${m.id}"]`);if(!el)return renderChat();
  const near=chat.scrollHeight-chat.scrollTop-chat.clientHeight<140;
  const t=document.createElement('div');t.innerHTML=assistantHtml(m);el.replaceWith(t.firstElementChild);
  syncTw(m);syncGlow();
  if(near)chat.scrollTop=chat.scrollHeight;onScroll()}
-function rerender(m){const el=chat.querySelector(`[data-mid="${m.id}"]`);if(!el)return;const t=document.createElement('div');t.innerHTML=assistantHtml(m);el.replaceWith(t.firstElementChild);syncTw(m)}
-function onScroll(){$('#scrollbtn').classList.toggle('show',chat.scrollHeight-chat.scrollTop-chat.clientHeight>240)}
+function rerender(m){const el=chat.querySelector('[data-mid="'+m.id+'"]');if(!el)return;const t=document.createElement('div');t.innerHTML=assistantHtml(m);el.replaceWith(t.firstElementChild);syncTw(m);if(m.ui.think){const w=chat.querySelector('[data-mid="'+m.id+'"] .twin.win');if(w)w.scrollTop=w.scrollHeight}}
+ function onScroll(){$('#scrollbtn').classList.toggle('show',chat.scrollHeight-chat.scrollTop-chat.clientHeight>240)}
 chat.addEventListener('scroll',onScroll,{passive:true});
 $('#scrollbtn').onclick=()=>chat.scrollTo({top:chat.scrollHeight,behavior:'smooth'});
 function renderNotice(){$('#notice').innerHTML=''}
@@ -834,7 +835,7 @@ function renderFiles(){$('#files').innerHTML=files.map((f,i)=>`<span class="fchi
 const findMsg=id=>cur?.messages.find(m=>m.id===id);
 const H={
  'toggle-mt':(b,m)=>{const it=m.items[+b.dataset.i];if(it){it.closed=!it.closed;rerender(m)}},
- 'toggle-think':(b,m)=>{m.ui.think=!m.ui.think;m.ui.touched=true;rerender(m)},
+ 'toggle-think':(b,m)=>{m.ui.think=!m.ui.think;m.ui.touched=true;m.ui.pin=true;rerender(m);const el=chat.querySelector('[data-mid="'+m.id+'"] .twin.win');if(el)el.scrollTop=el.scrollHeight},
  sources:(b,m)=>openSources(m),cite:(b,m)=>openSources(m,+b.dataset.n),
  copy:(b,m)=>copyText(m.answer),'copy-user':(b,m)=>copyText(m.text||''),
  'copy-code':b=>copyText(b.closest('.code').querySelector('code').textContent),
