@@ -4,13 +4,16 @@ import { spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
 
 const PORT = Number(process.env.PORT || 10000);
-const APP_PORT = Number(process.env.HARNESS_APP_PORT || 3081);
+const APP_PORT = Number(process.env.HARNESS_APP_PORT || 3080);
 const TOKEN = process.env.CONTROL_TOKEN || "";
-const ROOT = "/app/deepseek-harness-source";
+const PUBLIC_URL = process.env.RUNTIME_PUBLIC_URL || "https://deepseek-harness-runtime.onrender.com/";
+const PUBLIC_HOST = new URL(PUBLIC_URL).host;
 const APP_HOST = "127.0.0.1";
 let child = null;
 let state = "stopped";
 let lastError = null;
+let launchUrl = null;
+let launchBuffer = "";
 
 function authorized(req) {
   const header = req.headers.authorization || "";
@@ -24,7 +27,19 @@ function send(res, code, body) {
 }
 function status() {
   if (child && child.exitCode !== null) child = null;
-  return { state, running: state === "running", message: lastError || (state === "running" ? "Harness web process is running." : state === "starting" ? "Harness is starting." : "Harness is stopped.") };
+  return {
+    state,
+    running: state === "running",
+    launchUrl: state === "running" ? launchUrl : null,
+    message: lastError || (state === "running" ? "Harness web process is running." : state === "starting" ? "Harness is starting." : "Harness is stopped.")
+  };
+}
+function captureOutput(chunk) {
+  const value = chunk.toString();
+  process.stdout.write("[harness] " + value);
+  launchBuffer = (launchBuffer + value).slice(-12000);
+  const matches = launchBuffer.match(/https:\/\/deepseek-harness-runtime\.onrender\.com\/[^\s"'<>]+/g);
+  if (matches?.length) launchUrl = matches[matches.length - 1].replace(/[),.;]+$/, "");
 }
 async function waitForApp(proc) {
   const deadline = Date.now() + 90000;
@@ -42,14 +57,16 @@ async function start() {
   if (child && child.exitCode === null) return status();
   state = "starting";
   lastError = null;
-  const proc = spawn("pnpm", ["--dir", ROOT, "dsh", "web", "--no-open", "--port", String(APP_PORT)], {
+  launchUrl = null;
+  launchBuffer = "";
+  const proc = spawn("dsh", ["web", "--no-open", "--public-url", PUBLIC_URL, "--trusted-host", PUBLIC_HOST], {
     env: { ...process.env, DSH_HOME: process.env.DSH_HOME || "/tmp/dsh-home" },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true
   });
   child = proc;
-  proc.stdout.on("data", chunk => process.stdout.write("[harness] " + chunk));
-  proc.stderr.on("data", chunk => process.stderr.write("[harness] " + chunk));
+  proc.stdout.on("data", captureOutput);
+  proc.stderr.on("data", chunk => { process.stderr.write("[harness] " + chunk); captureOutput(chunk); });
   proc.on("exit", (code, signal) => {
     if (child === proc) {
       child = null;
@@ -73,13 +90,39 @@ function stop() {
   if (!child || child.exitCode !== null) {
     child = null;
     state = "stopped";
+    launchUrl = null;
     return status();
   }
   try { process.kill(-child.pid, "SIGTERM"); } catch {}
   child = null;
   state = "stopped";
   lastError = null;
+  launchUrl = null;
   return status();
+}
+function proxyHttp(req, res) {
+  if (!child || state !== "running") {
+    res.writeHead(503, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+    return res.end("DeepSeek Harness is stopped. Start it from the private dashboard.");
+  }
+  const upstream = http.request({
+    hostname: APP_HOST,
+    port: APP_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: req.headers.host || PUBLIC_HOST }
+  }, response => {
+    const headers = { ...response.headers };
+    const cookies = headers["set-cookie"];
+    if (cookies) headers["set-cookie"] = cookies.map(cookie => /;\s*secure(?:;|$)/i.test(cookie) ? cookie : cookie + "; Secure");
+    res.writeHead(response.statusCode || 502, headers);
+    response.pipe(res);
+  });
+  upstream.on("error", () => {
+    if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
+    res.end("Harness web process is unavailable.");
+  });
+  req.pipe(upstream);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -94,8 +137,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/control/stop" && req.method === "POST") return send(res, 200, stop());
     return send(res, 404, { error: "Not found" });
   }
-  res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
-  res.end("DeepSeek Harness runtime controller is online. Manage it from the private dashboard.");
+  return proxyHttp(req, res);
 });
 server.on("upgrade", (req, socket, head) => {
   if (!child || state !== "running") return socket.destroy();
