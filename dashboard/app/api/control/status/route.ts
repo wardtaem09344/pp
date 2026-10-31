@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { isValidSession, sessionCookieName } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const cookieStore = await cookies();
-  if (!isValidSession(cookieStore.get(sessionCookieName())?.value)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const base = process.env.HARNESS_CONTROL_URL;
   const token = process.env.HARNESS_CONTROL_TOKEN;
   if (!base || !token) {
