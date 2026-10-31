@@ -9,6 +9,7 @@ const TOKEN = process.env.CONTROL_TOKEN || "";
 const PUBLIC_URL = process.env.RUNTIME_PUBLIC_URL || "https://deepseek-harness-runtime.onrender.com/";
 const PUBLIC_HOST = new URL(PUBLIC_URL).host;
 const APP_HOST = "127.0.0.1";
+const WORKSPACE = "/app/deepseek-harness-source";
 let child = null;
 let state = "stopped";
 let lastError = null;
@@ -62,6 +63,7 @@ async function start() {
   const proc = spawn("dsh", ["web", "--no-open", "--public-url", PUBLIC_URL, "--trusted-host", PUBLIC_HOST], {
     env: { ...process.env, DSH_HOME: process.env.DSH_HOME || "/tmp/dsh-home" },
     stdio: ["ignore", "pipe", "pipe"],
+    cwd: WORKSPACE,
     detached: true
   });
   child = proc;
