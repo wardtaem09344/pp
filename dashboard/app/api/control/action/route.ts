@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   try { action = (await request.json()).action; } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
-  if (action !== "start" && action !== "stop") {
+  if (action !== "start" && action !== "stop" && action !== "restart") {
     return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
   }
 
