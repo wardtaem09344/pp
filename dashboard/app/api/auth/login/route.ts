@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, scryptSync, timingSafeEqual } from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,10 +9,12 @@ const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 8;
 const SESSION_SECONDS = 60 * 60 * 8;
 
-function safeEqual(a: string, b: string) {
-  const left = Buffer.from(a, "hex");
-  const right = Buffer.from(b, "hex");
-  return left.length === right.length && timingSafeEqual(left, right);
+function verifyPassword(password: string, stored: string) {
+  const [algorithm, salt, expectedHex] = stored.split("$");
+  if (algorithm !== "scrypt" || !salt || !expectedHex || !/^[a-f0-9]{32}$/.test(salt) || !/^[a-f0-9]{64}$/.test(expectedHex)) return false;
+  const actual = scryptSync(password, Buffer.from(salt, "hex"), 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  const expected = Buffer.from(expectedHex, "hex");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export async function POST(request: NextRequest) {
@@ -20,6 +22,8 @@ export async function POST(request: NextRequest) {
   if (origin && origin !== request.nextUrl.origin) {
     return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
   }
+  const contentLength = Number(request.headers.get("content-length") || "0");
+  if (contentLength > 2048) return NextResponse.json({ error: "Request too large" }, { status: 413 });
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const now = Date.now();
@@ -41,21 +45,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const expectedHash = process.env.DASHBOARD_PASSWORD_SHA256;
+  const storedPassword = process.env.DASHBOARD_PASSWORD_SCRYPT;
   const sessionSecret = process.env.DASHBOARD_SESSION_SECRET;
-  if (!expectedHash || !sessionSecret) {
+  if (!storedPassword || !sessionSecret) {
     return NextResponse.json({ error: "Authentication is not configured" }, { status: 503 });
   }
 
-  const actualHash = createHash("sha256").update(submitted, "utf8").digest("hex");
-  if (!safeEqual(actualHash, expectedHash)) {
-    return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
-  }
+  let valid = false;
+  try { valid = verifyPassword(submitted, storedPassword); } catch { valid = false; }
+  if (!valid) return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
 
   attempts.delete(ip);
   const payload = Buffer.from(JSON.stringify({ exp: now + SESSION_SECONDS * 1000 })).toString("base64url");
   const signature = createHmac("sha256", sessionSecret).update(payload).digest("base64url");
   const response = NextResponse.json({ ok: true });
+  response.headers.set("Cache-Control", "no-store");
   response.cookies.set("dsh_session", payload + "." + signature, {
     httpOnly: true,
     secure: request.nextUrl.protocol === "https:",
