@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Status = { connected?: boolean; running?: boolean; state: string; message?: string; error?: string };
+type Status = { connected?: boolean; running?: boolean; state: string; message?: string; error?: string; launchUrl?: string | null };
 
 export default function Dashboard() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -73,6 +73,7 @@ export default function Dashboard() {
             <button className="start-button" onClick={() => void control("start")} disabled={!connected || busy || state === "running" || state === "starting"}>{busy && state !== "running" ? "Please wait…" : "▶ تشغيل المشروع"}</button>
             <button className="stop-button" onClick={() => void control("stop")} disabled={!connected || busy || state !== "running"}>إيقاف المشروع</button>
           </div>
+          {state === "running" && status?.launchUrl && <p><a className="runtime-link" href={status.launchUrl} target="_blank" rel="noreferrer">فتح واجهة DeepSeek Harness ↗</a></p>}
           <div className="panel-foot"><span>Automatic status refresh</span><span>Every 10 seconds</span></div>
         </article>
         <article className="panel">
