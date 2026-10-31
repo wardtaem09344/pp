@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const COOKIE = "dsh_session";
 
-function decode(value: string): Uint8Array {
+function decode(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(normalized);
-  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+  const bytes = new Uint8Array(new ArrayBuffer(raw.length));
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
 }
 
 async function validSession(token: string, secret: string): Promise<boolean> {
@@ -20,7 +22,8 @@ async function validSession(token: string, secret: string): Promise<boolean> {
       ["verify"]
     );
     const data = new TextEncoder().encode(payload);
-    return await crypto.subtle.verify("HMAC", key, decode(signature), data) &&
+    const signatureBytes = decode(signature);
+    return await crypto.subtle.verify("HMAC", key, signatureBytes.buffer, data.buffer) &&
       Number(JSON.parse(new TextDecoder().decode(decode(payload))).exp) > Date.now();
   } catch {
     return false;
