@@ -15,7 +15,17 @@ let state = "stopped";
 let lastError = null;
 let launchUrl = null;
 let launchBuffer = "";
+let logSequence = 0;
+const terminalLogs = [];
 
+function addLog(stream, chunk) {
+  const lines = chunk.toString().replace(/\r/g, "").split("\n");
+  for (const line of lines) {
+    if (!line) continue;
+    terminalLogs.push({ id: ++logSequence, time: new Date().toISOString(), stream, text: line });
+  }
+  if (terminalLogs.length > 400) terminalLogs.splice(0, terminalLogs.length - 400);
+}
 function authorized(req) {
   const header = req.headers.authorization || "";
   const supplied = Buffer.from(header.startsWith("Bearer ") ? header.slice(7) : "");
@@ -35,9 +45,10 @@ function status() {
     message: lastError || (state === "running" ? "Harness web process is running." : state === "starting" ? "Harness is starting." : state === "error" ? "Harness failed to start." : "Harness is stopped.")
   };
 }
-function captureOutput(chunk) {
+function captureOutput(stream, chunk) {
   const value = chunk.toString();
   process.stdout.write("[harness] " + value);
+  addLog(stream, value);
   launchBuffer = (launchBuffer + value).slice(-12000);
   const matches = launchBuffer.match(/https:\/\/deepseek-harness-runtime\.onrender\.com\/[^\s"'<>]+/g);
   if (matches?.length) launchUrl = matches[matches.length - 1].replace(/[),.;]+$/, "");
@@ -60,6 +71,7 @@ function start() {
   lastError = null;
   launchUrl = null;
   launchBuffer = "";
+  addLog("system", "Starting DeepSeek Harness…");
   const proc = spawn("dsh", ["web", "--no-open", "--public-url", PUBLIC_URL, "--trusted-host", PUBLIC_HOST], {
     env: { ...process.env, DSH_HOME: process.env.DSH_HOME || "/tmp/dsh-home" },
     stdio: ["ignore", "pipe", "pipe"],
@@ -67,23 +79,24 @@ function start() {
     detached: true
   });
   child = proc;
-  proc.stdout.on("data", captureOutput);
-  proc.stderr.on("data", chunk => { process.stderr.write("[harness] " + chunk); captureOutput(chunk); });
+  proc.stdout.on("data", chunk => captureOutput("stdout", chunk));
+  proc.stderr.on("data", chunk => captureOutput("stderr", chunk));
   proc.on("exit", (code, signal) => {
     if (child === proc) {
       child = null;
       state = "stopped";
+      addLog("system", "Harness process exited (code " + code + ", signal " + (signal || "none") + ").");
       if (code && code !== 0) lastError = "Harness exited with code " + code + " (signal " + (signal || "none") + ").";
     }
   });
 
-  // Do not hold the dashboard request open during the full first-run boot.
   void (async () => {
     try {
       await waitForApp(proc);
       if (child === proc) {
         state = "running";
         lastError = null;
+        addLog("system", "Harness web interface is ready.");
       }
     } catch (error) {
       if (child === proc) {
@@ -91,10 +104,10 @@ function start() {
         child = null;
         state = "error";
         lastError = error instanceof Error ? error.message : "Startup failed.";
+        addLog("error", lastError);
       }
     }
   })();
-
   return status();
 }
 function stop() {
@@ -102,6 +115,7 @@ function stop() {
     child = null;
     state = "stopped";
     launchUrl = null;
+    addLog("system", "Harness is already stopped.");
     return status();
   }
   try { process.kill(-child.pid, "SIGTERM"); } catch {}
@@ -109,6 +123,7 @@ function stop() {
   state = "stopped";
   lastError = null;
   launchUrl = null;
+  addLog("system", "Stop requested for Harness.");
   return status();
 }
 function proxyHttp(req, res) {
@@ -141,6 +156,10 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname.startsWith("/control/")) {
     if (!authorized(req)) return send(res, 401, { error: "Unauthorized" });
     if (url.pathname === "/control/status" && req.method === "GET") return send(res, 200, status());
+    if (url.pathname === "/control/logs" && req.method === "GET") {
+      const after = Number(url.searchParams.get("after") || 0);
+      return send(res, 200, { logs: terminalLogs.filter(item => item.id > after).slice(-200), latestId: logSequence });
+    }
     if (url.pathname === "/control/start" && req.method === "POST") {
       try { return send(res, 200, start()); }
       catch (error) { return send(res, 503, { ...status(), error: error instanceof Error ? error.message : "Startup failed." }); }
