@@ -10,10 +10,16 @@ export default function Dashboard() {
   async function refresh() {
     try {
       const response = await fetch("/api/control/status", { cache: "no-store" });
+      if (response.status === 401) { window.location.replace("/login"); return; }
       setStatus(await response.json());
     } catch {
       setStatus({ connected: false, state: "unreachable", message: "Could not check the runtime." });
     }
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.replace("/login");
   }
 
   useEffect(() => {
@@ -29,7 +35,7 @@ export default function Dashboard() {
     <main className="shell">
       <header className="topbar">
         <a className="brand" href="#"><span className="brand-mark">D</span> DeepSeek <b>Harness</b></a>
-        <div className="top-actions"><span className="private-pill"><i /> VERCEL TEAM-ONLY ACCESS</span></div>
+        <div className="top-actions"><span className="private-pill"><i /> PRIVATE PASSWORD ACCESS</span><button className="ghost" onClick={logout}>Lock workspace</button></div>
       </header>
       <section className="welcome">
         <div><div className="eyebrow">CONTROL CENTER</div><h1>Your workspace.</h1><p className="muted">A private home for your DeepSeek Harness runtime.</p></div>
@@ -43,8 +49,8 @@ export default function Dashboard() {
         </article>
         <article className="panel">
           <div className="eyebrow">ACCESS</div><h2>Private by design</h2>
-          <p className="muted">Vercel team authentication protects the dashboard and its API routes. Preview deployments are disabled.</p>
-          <div className="secure-line"><i /> Team-only access enabled</div>
+          <p className="muted">Protected by Vercel team authentication and a separate password. API routes require a signed, HTTP-only session.</p>
+          <div className="secure-line"><i /> Two layers of access protection enabled</div>
         </article>
         <article className="panel wide">
           <div className="eyebrow">NEXT STEP</div><h2>Connect your runtime</h2>
