@@ -43,7 +43,7 @@ export default function Dashboard() {
     }
   }
 
-  async function control(action: "start" | "stop") {
+  async function control(action: "start" | "stop" | "restart") {
     setBusy(true);
     setActionError("");
     try {
@@ -119,6 +119,7 @@ export default function Dashboard() {
           <div className="control-actions">
             <button className="start-button" onClick={() => void control("start")} disabled={!connected || busy || isRunning || state === "starting"}>{busy ? "لحظة…" : "▶ تشغيل Harness"}</button>
             <button className="stop-button" onClick={() => void control("stop")} disabled={!connected || busy || (!isRunning && state !== "starting")}>■ إيقاف Harness</button>
+            <button className="ghost refresh-button" onClick={() => void control("restart")} disabled={!connected || busy || !isRunning}>↻ إعادة التشغيل</button>
             <button className="ghost refresh-button" onClick={() => { void refresh(); void refreshLogs(); }} disabled={busy}>تحديث الحالة</button>
           </div>
           <div className="panel-foot"><span>تحديث تلقائي</span><span>كل 2.5 ثانية</span></div>
