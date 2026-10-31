@@ -47,7 +47,7 @@ async function waitForApp(proc) {
   while (Date.now() < deadline) {
     if (proc.exitCode !== null) throw new Error("Harness process exited during startup.");
     try {
-      const response = await fetch(`http://${APP_HOST}:${APP_PORT}/`, { signal: AbortSignal.timeout(1500), redirect: "manual" });
+      const response = await fetch("http://" + APP_HOST + ":" + APP_PORT + "/", { signal: AbortSignal.timeout(1500), redirect: "manual" });
       if (response.status < 500) return;
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -73,12 +73,11 @@ function start() {
     if (child === proc) {
       child = null;
       state = "stopped";
-      if (code && code !== 0) lastError = `Harness exited with code ${code} (signal ${signal || "none"}).`;
+      if (code && code !== 0) lastError = "Harness exited with code " + code + " (signal " + (signal || "none") + ").";
     }
   });
 
-  // Start asynchronously so the dashboard request never waits for the full
-  // first-run DSH boot (which can exceed Vercel's request duration limit).
+  // Do not hold the dashboard request open during the full first-run boot.
   void (async () => {
     try {
       await waitForApp(proc);
@@ -126,7 +125,7 @@ function proxyHttp(req, res) {
   }, response => {
     const headers = { ...response.headers };
     const cookies = headers["set-cookie"];
-    if (cookies) headers["set-cookie"] = cookies.map(cookie => /;\\s*secure(?:;|$)/i.test(cookie) ? cookie : cookie + "; Secure");
+    if (cookies) headers["set-cookie"] = cookies.map(cookie => /;\s*secure(?:;|$)/i.test(cookie) ? cookie : cookie + "; Secure");
     res.writeHead(response.statusCode || 502, headers);
     response.pipe(res);
   });
@@ -154,17 +153,17 @@ const server = http.createServer(async (req, res) => {
 server.on("upgrade", (req, socket, head) => {
   if (!child || state !== "running") return socket.destroy();
   const upstream = net.connect(APP_PORT, APP_HOST, () => {
-    upstream.write(`${req.method} ${req.url} HTTP/${req.httpVersion}\\r\\n`);
+    upstream.write(req.method + " " + req.url + " HTTP/" + req.httpVersion + "\r\n");
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value !== undefined) upstream.write(`${key}: ${Array.isArray(value) ? value.join(", ") : value}\\r\\n`);
+      if (value !== undefined) upstream.write(key + ": " + (Array.isArray(value) ? value.join(", ") : value) + "\r\n");
     }
-    upstream.write("\\r\\n");
+    upstream.write("\r\n");
     if (head.length) upstream.write(head);
     socket.pipe(upstream).pipe(socket);
   });
   upstream.on("error", () => socket.destroy());
   socket.on("error", () => upstream.destroy());
 });
-server.listen(PORT, "0.0.0.0", () => console.log(`Runtime controller listening on ${PORT}`));
+server.listen(PORT, "0.0.0.0", () => console.log("Runtime controller listening on " + PORT));
 process.on("SIGTERM", () => { stop(); server.close(() => process.exit(0)); });
 process.on("SIGINT", () => { stop(); server.close(() => process.exit(0)); });
