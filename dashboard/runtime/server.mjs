@@ -165,6 +165,11 @@ const server = http.createServer(async (req, res) => {
       catch (error) { return send(res, 503, { ...status(), error: error instanceof Error ? error.message : "Startup failed." }); }
     }
     if (url.pathname === "/control/stop" && req.method === "POST") return send(res, 200, stop());
+    if (url.pathname === "/control/restart" && req.method === "POST") {
+      stop();
+      await new Promise(resolve => setTimeout(resolve, 1800));
+      return send(res, 200, start());
+    }
     return send(res, 404, { error: "Not found" });
   }
   return proxyHttp(req, res);
