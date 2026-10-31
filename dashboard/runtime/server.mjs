@@ -32,7 +32,7 @@ function status() {
     state,
     running: state === "running",
     launchUrl: state === "running" ? launchUrl : null,
-    message: lastError || (state === "running" ? "Harness web process is running." : state === "starting" ? "Harness is starting." : "Harness is stopped.")
+    message: lastError || (state === "running" ? "Harness web process is running." : state === "starting" ? "Harness is starting." : state === "error" ? "Harness failed to start." : "Harness is stopped.")
   };
 }
 function captureOutput(chunk) {
@@ -54,7 +54,7 @@ async function waitForApp(proc) {
   }
   throw new Error("Harness did not become ready within 90 seconds.");
 }
-async function start() {
+function start() {
   if (child && child.exitCode === null) return status();
   state = "starting";
   lastError = null;
@@ -76,17 +76,27 @@ async function start() {
       if (code && code !== 0) lastError = `Harness exited with code ${code} (signal ${signal || "none"}).`;
     }
   });
-  try {
-    await waitForApp(proc);
-    state = "running";
-    return status();
-  } catch (error) {
-    try { process.kill(-proc.pid, "SIGTERM"); } catch {}
-    child = null;
-    state = "error";
-    lastError = error instanceof Error ? error.message : "Startup failed.";
-    throw error;
-  }
+
+  // Start asynchronously so the dashboard request never waits for the full
+  // first-run DSH boot (which can exceed Vercel's request duration limit).
+  void (async () => {
+    try {
+      await waitForApp(proc);
+      if (child === proc) {
+        state = "running";
+        lastError = null;
+      }
+    } catch (error) {
+      if (child === proc) {
+        try { process.kill(-proc.pid, "SIGTERM"); } catch {}
+        child = null;
+        state = "error";
+        lastError = error instanceof Error ? error.message : "Startup failed.";
+      }
+    }
+  })();
+
+  return status();
 }
 function stop() {
   if (!child || child.exitCode !== null) {
@@ -116,7 +126,7 @@ function proxyHttp(req, res) {
   }, response => {
     const headers = { ...response.headers };
     const cookies = headers["set-cookie"];
-    if (cookies) headers["set-cookie"] = cookies.map(cookie => /;\s*secure(?:;|$)/i.test(cookie) ? cookie : cookie + "; Secure");
+    if (cookies) headers["set-cookie"] = cookies.map(cookie => /;\\s*secure(?:;|$)/i.test(cookie) ? cookie : cookie + "; Secure");
     res.writeHead(response.statusCode || 502, headers);
     response.pipe(res);
   });
@@ -133,7 +143,7 @@ const server = http.createServer(async (req, res) => {
     if (!authorized(req)) return send(res, 401, { error: "Unauthorized" });
     if (url.pathname === "/control/status" && req.method === "GET") return send(res, 200, status());
     if (url.pathname === "/control/start" && req.method === "POST") {
-      try { return send(res, 200, await start()); }
+      try { return send(res, 200, start()); }
       catch (error) { return send(res, 503, { ...status(), error: error instanceof Error ? error.message : "Startup failed." }); }
     }
     if (url.pathname === "/control/stop" && req.method === "POST") return send(res, 200, stop());
@@ -144,11 +154,11 @@ const server = http.createServer(async (req, res) => {
 server.on("upgrade", (req, socket, head) => {
   if (!child || state !== "running") return socket.destroy();
   const upstream = net.connect(APP_PORT, APP_HOST, () => {
-    upstream.write(`${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`);
+    upstream.write(`${req.method} ${req.url} HTTP/${req.httpVersion}\\r\\n`);
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value !== undefined) upstream.write(`${key}: ${Array.isArray(value) ? value.join(", ") : value}\r\n`);
+      if (value !== undefined) upstream.write(`${key}: ${Array.isArray(value) ? value.join(", ") : value}\\r\\n`);
     }
-    upstream.write("\r\n");
+    upstream.write("\\r\\n");
     if (head.length) upstream.write(head);
     socket.pipe(upstream).pipe(socket);
   });
