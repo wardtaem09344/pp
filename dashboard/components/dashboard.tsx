@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 
 type Status = { connected?: boolean; running?: boolean; state: string; message?: string; error?: string; launchUrl?: string | null };
-type LogLine = { id: number; time: string; stream: string; text: string };
+type LogLine = { id: number; instanceId?: string; time: string; stream: string; text: string };
+const LOG_CACHE_KEY = "dsh_terminal_logs_v1";
+
+function sanitizeTerminalText(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\\bBearer\\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [مخفي]")
+    .replace(/([?&](?:token|access_token|api_key|apikey|secret|key|auth|code)=)[^&\\s"'<>]+/gi, "$1[مخفي]")
+    .replace(/\\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|authorization)\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;]+)/gi, "$1[مخفي]")
+    .replace(/https?:\\/\\/[^\\s"'<>]+/gi, "[رابط مخفي]");
+}
 
 export default function Dashboard() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -13,7 +22,9 @@ export default function Dashboard() {
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
   const latestLogId = useRef(0);
+  const runtimeInstanceId = useRef<string | null>(null);
   const terminalEnd = useRef<HTMLDivElement>(null);
 
   async function refresh() {
@@ -28,16 +39,35 @@ export default function Dashboard() {
 
   async function refreshLogs() {
     try {
-      const response = await fetch("/api/control/logs?after=" + latestLogId.current, { cache: "no-store" });
-      if (response.status === 401) { window.location.replace("/login"); return; }
-      const data = await response.json();
+      const readLogs = async (after: number) => {
+        const response = await fetch("/api/control/logs?after=" + after, { cache: "no-store" });
+        if (response.status === 401) { window.location.replace("/login"); return null; }
+        if (!response.ok) return null;
+        return await response.json();
+      };
+
+      let data = await readLogs(latestLogId.current);
+      if (!data) return;
+      const nextInstanceId = typeof data.instanceId === "string" ? data.instanceId : "legacy";
+      if (runtimeInstanceId.current && runtimeInstanceId.current !== nextInstanceId) {
+        latestLogId.current = 0;
+        data = await readLogs(0);
+        if (!data) return;
+      }
+      runtimeInstanceId.current = nextInstanceId;
+
       if (Array.isArray(data.logs) && data.logs.length) {
+        const incoming = data.logs.map((item: LogLine) => ({
+          ...item,
+          instanceId: nextInstanceId,
+          text: sanitizeTerminalText(item.text)
+        }));
         setLogs(previous => {
-          const known = new Set(previous.map(item => item.id));
-          return [...previous, ...data.logs.filter((item: LogLine) => !known.has(item.id))].slice(-250);
+          const known = new Set(previous.map(item => (item.instanceId ?? "legacy") + ":" + item.id));
+          return [...previous, ...incoming.filter((item: LogLine) => !known.has((item.instanceId ?? "legacy") + ":" + item.id))].slice(-250);
         });
       }
-      if (typeof data.latestId === "number") latestLogId.current = Math.max(latestLogId.current, data.latestId);
+      if (typeof data.latestId === "number") latestLogId.current = data.latestId;
     } catch {
       // Keep the last visible output; the next poll will retry.
     }
@@ -81,6 +111,21 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem(LOG_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setLogs(parsed.filter(item => item && typeof item.id === "number").slice(-250).map((item: LogLine) => ({
+            ...item,
+            text: sanitizeTerminalText(item.text)
+          })));
+        }
+      }
+    } catch {
+      // Ignore a damaged or unavailable local cache.
+    }
+    setCacheLoaded(true);
     void refresh();
     void refreshLogs();
     const id = window.setInterval(() => {
@@ -89,6 +134,16 @@ export default function Dashboard() {
     }, 2500);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (!cacheLoaded) return;
+    try {
+      const safeLogs = logs.slice(-250).map(item => ({ ...item, text: sanitizeTerminalText(item.text) }));
+      localStorage.setItem(LOG_CACHE_KEY, JSON.stringify(safeLogs));
+    } catch {
+      // The live terminal continues working if browser storage is unavailable.
+    }
+  }, [logs, cacheLoaded]);
 
   useEffect(() => {
     if (autoScroll) terminalEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -133,7 +188,7 @@ export default function Dashboard() {
               <a className="runtime-link" href={launchUrl} target="_blank" rel="noreferrer">فتح واجهة Harness ↗</a>
               <button className="ghost" onClick={() => void copyLink()}>{copied ? "تم النسخ ✓" : "نسخ الرابط"}</button>
             </div>
-          ) : <div className="link-placeholder">{state === "starting" ? "بانتظار اكتمال التشغيل…" : "الرابط غير متاح حاليًا"}</div>}
+          ) : <div className="link-placeholder">{state === "starting" ? "بانتظار اكتمال التشغيل…" : "الرابط غير متاح حاليًا؛ شغّل Harness للحصول على رابط جديد."}</div>}
           <div className="secure-line"><i /> الرابط لا يظهر إلا بعد جاهزية الخدمة</div>
         </article>
 
@@ -150,14 +205,14 @@ export default function Dashboard() {
             <div className="terminal-bar"><span><i /> <i /> <i /></span><span>runtime — live output</span><span>{logs.length} سطر</span></div>
             <div className="terminal-body">
               {logs.length === 0 ? <div className="terminal-empty">بانتظار السجلات… اضغط «تشغيل Harness» لمتابعة الإقلاع.</div> : logs.map(line => (
-                <div className={"terminal-line " + (line.stream === "stderr" || line.stream === "error" ? "terminal-error" : line.stream === "system" ? "terminal-system" : "")} key={line.id}>
+                <div className={"terminal-line " + (line.stream === "stderr" || line.stream === "error" ? "terminal-error" : line.stream === "system" ? "terminal-system" : "")} key={(line.instanceId ?? "legacy") + ":" + line.id}>
                   <time>{new Date(line.time).toLocaleTimeString("ar", { hour12: false })}</time><b>{line.stream}</b><span>{line.text}</span>
                 </div>
               ))}
               <div ref={terminalEnd} />
             </div>
           </div>}
-          <div className="terminal-note">الطرفية للعرض والمراقبة فقط؛ أوامر النظام المباشرة غير مفعّلة لحماية الخادم.</div>
+          <div className="terminal-note">الطرفية للعرض والمراقبة فقط؛ أوامر النظام المباشرة غير مفعّلة لحماية الخادم. تُحفظ آخر 250 سطراً محلياً على هذا المتصفح، مع إخفاء الروابط والرموز السرية.</div>
         </article>
 
         <article className="panel">
