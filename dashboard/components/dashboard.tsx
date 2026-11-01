@@ -8,10 +8,10 @@ const LOG_CACHE_KEY = "dsh_terminal_logs_v1";
 
 function sanitizeTerminalText(value: unknown): string {
   return String(value ?? "")
-    .replace(/\\bBearer\\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [مخفي]")
-    .replace(/([?&](?:token|access_token|api_key|apikey|secret|key|auth|code)=)[^&\\s"'<>]+/gi, "$1[مخفي]")
-    .replace(/\\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|authorization)\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;]+)/gi, "$1[مخفي]")
-    .replace(/https?:\\/\\/[^\\s"'<>]+/gi, "[رابط مخفي]");
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [مخفي]")
+    .replace(/([?&](?:token|access_token|api_key|apikey|secret|key|auth|code)=)[^&\s"'<>]+/gi, "$1[مخفي]")
+    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|authorization)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[مخفي]")
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[رابط مخفي]");
 }
 
 export default function Dashboard() {
