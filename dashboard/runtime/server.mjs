@@ -22,10 +22,10 @@ const terminalLogs = [];
 function redactSecrets(value) {
   return String(value)
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-    .replace(/([?&](?:token|access_token|api_key|apikey|secret|key|auth|code)=)[^&\\s"'<>]+/gi, "$1[REDACTED]")
-    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|authorization)\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;]+)/gi, "$1[REDACTED]")
+    .replace(/([?&](?:token|access_token|api_key|apikey|secret|key|auth|code)=)[^&\s"'<>]+/gi, "$1[REDACTED]")
+    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|authorization)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[REDACTED]")
     .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
-    .replace(/https?:\\/\\/[^\\s"'<>]+/gi, "[URL REDACTED]");
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL REDACTED]");
 }
 function addLog(stream, chunk) {
   const lines = redactSecrets(chunk.toString()).replace(/\r/g, "").split("\n");
