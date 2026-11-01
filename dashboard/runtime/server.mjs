@@ -1,11 +1,12 @@
 import http from "node:http";
 import net from "node:net";
 import { spawn } from "node:child_process";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, randomUUID } from "node:crypto";
 
 const PORT = Number(process.env.PORT || 10000);
 const APP_PORT = Number(process.env.HARNESS_APP_PORT || 3080);
 const TOKEN = process.env.CONTROL_TOKEN || "";
+const INSTANCE_ID = randomUUID();
 const PUBLIC_URL = process.env.RUNTIME_PUBLIC_URL || "https://deepseek-harness-runtime.onrender.com/";
 const PUBLIC_HOST = new URL(PUBLIC_URL).host;
 const APP_HOST = "127.0.0.1";
@@ -18,11 +19,19 @@ let launchBuffer = "";
 let logSequence = 0;
 const terminalLogs = [];
 
+function redactSecrets(value) {
+  return String(value)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+    .replace(/([?&](?:token|access_token|api_key|apikey|secret|key|auth|code)=)[^&\s"'<>]+/gi, "$1[REDACTED]")
+    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|authorization)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, "$1[REDACTED]")
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,})\b/g, "[REDACTED]")
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "[URL REDACTED]");
+}
 function addLog(stream, chunk) {
-  const lines = chunk.toString().replace(/\r/g, "").split("\n");
+  const lines = redactSecrets(chunk.toString()).replace(/\r/g, "").split("\n");
   for (const line of lines) {
     if (!line) continue;
-    terminalLogs.push({ id: ++logSequence, time: new Date().toISOString(), stream, text: line });
+    terminalLogs.push({ id: ++logSequence, instanceId: INSTANCE_ID, time: new Date().toISOString(), stream, text: line });
   }
   if (terminalLogs.length > 400) terminalLogs.splice(0, terminalLogs.length - 400);
 }
@@ -39,6 +48,7 @@ function send(res, code, body) {
 function status() {
   if (child && child.exitCode !== null) child = null;
   return {
+    instanceId: INSTANCE_ID,
     state,
     running: state === "running",
     launchUrl: state === "running" ? launchUrl : null,
@@ -47,7 +57,7 @@ function status() {
 }
 function captureOutput(stream, chunk) {
   const value = chunk.toString();
-  process.stdout.write("[harness] " + value);
+  process.stdout.write("[harness] " + redactSecrets(value));
   addLog(stream, value);
   launchBuffer = (launchBuffer + value).slice(-12000);
   const matches = launchBuffer.match(/https:\/\/deepseek-harness-runtime\.onrender\.com\/[^\s"'<>]+/g);
@@ -158,7 +168,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/control/status" && req.method === "GET") return send(res, 200, status());
     if (url.pathname === "/control/logs" && req.method === "GET") {
       const after = Number(url.searchParams.get("after") || 0);
-      return send(res, 200, { logs: terminalLogs.filter(item => item.id > after).slice(-200), latestId: logSequence });
+      return send(res, 200, { instanceId: INSTANCE_ID, logs: terminalLogs.filter(item => item.id > after).slice(-200), latestId: logSequence });
     }
     if (url.pathname === "/control/start" && req.method === "POST") {
       try { return send(res, 200, start()); }
