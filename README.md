@@ -12,9 +12,24 @@ Create a Render **Docker Web Service** from this repository's `main` branch. The
 
 Render supplies `PORT` and `RENDER_EXTERNAL_URL`. The entrypoint discovers the container's concrete IP address, binds to it (not a wildcard address), and trusts the public Render hostname for browser Host checks.
 
+## DeepSeek model connection
+
+The pinned Harness build already includes its native DeepSeek Messages provider. It reads:
+
+- `DEEPSEEK_API_KEY` — your provider-issued API key (set this as a secret in Render; never commit it).
+- `DEEPSEEK_BASE_URL` — optional Messages-compatible API root. If omitted, Harness uses the official DeepSeek endpoint.
+
+For this pinned adapter, the endpoint must speak **Anthropic Messages**. The adapter appends `/v1/messages` (and `/v1/files` for image uploads) to the configured root. Do not put an OpenAI Chat Completions URL or an unverified `/raw` Worker URL here. A gateway needs to explicitly document Messages compatibility before it can be used.
+
+In Render, open the service's **Environment** settings and add `DEEPSEEK_API_KEY` as a secret. Leave `DEEPSEEK_BASE_URL` unset to use the official endpoint, or set it only to a verified Messages-compatible root. After changing environment variables, redeploy the service.
+
+## Other supplied endpoints
+
+The previously supplied `ai-seek` route is a private app protocol, not a documented Harness provider protocol. Its exposed session token must not be reused or committed. The image-generation Worker is a separate image API, not a chat-model provider. The Qwen and ChatDeep projects use their own site-specific APIs and session/anti-bot flows; they are not plug-and-play Harness model providers. They are deliberately not wired into the active model config until their supported public protocol and authentication are documented and verified.
+
 ## Credentials
 
-Do not commit API keys. Add `DEEPSEEK_API_KEY` as a secret environment variable in Render if the application requires it, or configure the provider in the application. `PUBLIC_URL` is optional; when unset, the entrypoint uses `RENDER_EXTERNAL_URL`.
+Do not commit API keys, access tokens, cookies, or session files. Keep secrets in Render's Environment settings. `PUBLIC_URL` is optional; when unset, the entrypoint uses `RENDER_EXTERNAL_URL`.
 
 ## Runtime notes
 
