@@ -1,0 +1,8 @@
+# EXAMPLE ONLY — not loaded automatically and not verified as a working
+# DeepSeek Harness provider integration.
+#
+# Configure supported providers through the Harness UI or official provider
+# documentation. Do not add API keys, tokens, or guessed base URLs here.
+#
+# The ai-seek integration has not been validated against this pinned Harness
+# build; this file intentionally contains no executable provider configuration.
