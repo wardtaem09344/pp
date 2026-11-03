@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: dsh-full
+    runtime: docker
+    plan: free
+    region: frankfurt
+    numInstances: 1
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
