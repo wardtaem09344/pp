@@ -16,7 +16,7 @@ RUN git init \
  && git checkout --detach FETCH_HEAD
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm run build:artifacts -- --serial
+RUN pnpm exec tsx scripts/build.ts --scope artifacts --serial
 
 COPY entrypoint.sh /usr/local/bin/dsh-entrypoint
 RUN chmod +x /usr/local/bin/dsh-entrypoint
