@@ -32,7 +32,15 @@ async function validSession(token: string, secret: string): Promise<boolean> {
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (path === "/login" || path === "/api/auth/login" || path.startsWith("/_next/") || path === "/favicon.ico") {
+  if (
+    path === "/login" ||
+    path === "/api/auth/login" ||
+    path === "/api/auth/google" ||
+    path === "/api/auth/google/callback" ||
+    path === "/api/auth/logout" ||
+    path.startsWith("/_next/") ||
+    path === "/favicon.ico"
+  ) {
     return NextResponse.next();
   }
 
